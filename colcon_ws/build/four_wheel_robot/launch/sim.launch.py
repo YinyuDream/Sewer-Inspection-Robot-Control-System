@@ -1,1 +1,0 @@
-/home/yinyudream/Desktop/final_design/colcon_ws/src/four_wheel_robot/launch/sim.launch.py

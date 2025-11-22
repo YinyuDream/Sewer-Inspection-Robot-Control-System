@@ -1,9 +1,0 @@
-source;share/four_wheel_robot/hook/pythonpath.ps1
-source;share/four_wheel_robot/hook/pythonpath.dsv
-source;share/four_wheel_robot/hook/pythonpath.sh
-source;share/four_wheel_robot/hook/ament_prefix_path.ps1
-source;share/four_wheel_robot/hook/ament_prefix_path.dsv
-source;share/four_wheel_robot/hook/ament_prefix_path.sh
-source;../../build/four_wheel_robot/share/four_wheel_robot/hook/pythonpath_develop.ps1
-source;../../build/four_wheel_robot/share/four_wheel_robot/hook/pythonpath_develop.dsv
-source;../../build/four_wheel_robot/share/four_wheel_robot/hook/pythonpath_develop.sh

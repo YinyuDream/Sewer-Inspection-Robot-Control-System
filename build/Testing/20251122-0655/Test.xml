@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Site BuildName="(empty)"
+	BuildStamp="20251122-0655-Experimental"
+	Name="Kamisata-Ayaka"
+	Generator="ctest-3.22.1"
+	CompilerName="/usr/bin/g++"
+	CompilerVersion="11.4.0"
+	OSName="Linux"
+	Hostname="Kamisata-Ayaka"
+	OSRelease="6.8.0-87-generic"
+	OSVersion="#88~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Oct 14 14:03:14 UTC 2"
+	OSPlatform="x86_64"
+	Is64Bits="1"
+	VendorString="GenuineIntel"
+	VendorID="Intel Corporation"
+	FamilyID="6"
+	ModelID="154"
+	ProcessorCacheSize="18432"
+	NumberOfLogicalCPU="16"
+	NumberOfPhysicalCPU="12"
+	TotalVirtualMemory="15625"
+	TotalPhysicalMemory="15781"
+	LogicalProcessorsPerPhysical="1"
+	ProcessorClockFrequency="1282.91"
+	>
+	<Testing>
+		<StartDateTime>Nov 22 14:55 CST</StartDateTime>
+		<StartTestTime>1763794507</StartTestTime>
+		<TestList/>
+		<EndDateTime>Nov 22 14:55 CST</EndDateTime>
+		<EndTestTime>1763794507</EndTestTime>
+		<ElapsedMinutes>0</ElapsedMinutes>
+	</Testing>
+</Site>

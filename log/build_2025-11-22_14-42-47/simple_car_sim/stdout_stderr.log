@@ -1,0 +1,24 @@
+-- Install configuration: ""
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/launch
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/launch/simulation.launch.py
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/urdf
+-- Installing: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/urdf/robot.urdf.xacro
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/worlds
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/worlds/car_world.sdf
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/rviz
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/rviz/config.rviz
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/ament_index/resource_index/package_run_dependencies/simple_car_sim
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/ament_index/resource_index/parent_prefix_path/simple_car_sim
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/environment/ament_prefix_path.sh
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/environment/ament_prefix_path.dsv
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/environment/path.sh
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/environment/path.dsv
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/local_setup.bash
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/local_setup.sh
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/local_setup.zsh
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/local_setup.dsv
+-- Installing: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/package.dsv
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/ament_index/resource_index/packages/simple_car_sim
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/cmake/simple_car_simConfig.cmake
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/cmake/simple_car_simConfig-version.cmake
+-- Up-to-date: /home/yinyudream/Desktop/final_design/install/simple_car_sim/share/simple_car_sim/package.xml
