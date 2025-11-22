@@ -25,7 +25,7 @@ AMENT_CMAKE_ENVIRONMENT_PARENT_PREFIX_PATH_GENERATION:BOOL=ON
 
 //Replace the CMake install command with a custom implementation
 // using symlinks instead of copying resources
-AMENT_CMAKE_SYMLINK_INSTALL:BOOL=OFF
+AMENT_CMAKE_SYMLINK_INSTALL:BOOL=1
 
 //Generate an uninstall target to revert the effects of the install
 // step
@@ -1059,6 +1059,8 @@ _Python3_EXECUTABLE:INTERNAL=/home/yinyudream/miniconda3/bin/python3
 //Python3 Properties
 _Python3_INTERPRETER_PROPERTIES:INTERNAL=Python;3;12;9;64;;cpython-312-x86_64-linux-gnu;/home/yinyudream/miniconda3/lib/python3.12;/home/yinyudream/miniconda3/lib/python3.12;/home/yinyudream/miniconda3/lib/python3.12/site-packages;/home/yinyudream/miniconda3/lib/python3.12/site-packages
 _Python3_INTERPRETER_SIGNATURE:INTERNAL=e8906e11b1d52535f20395fa2aef5d15
+//Index for unique symlink install targets
+__AMENT_CMAKE_SYMLINK_INSTALL_TARGETS_INDEX:INTERNAL=0
 __pkg_config_arguments_TINYXML2:INTERNAL=QUIET;tinyxml2
 __pkg_config_arguments_UUID:INTERNAL=QUIET;uuid
 __pkg_config_arguments_ZeroMQ:INTERNAL=QUIET;libzmq >= 4

@@ -10,7 +10,7 @@ def generate_launch_description():
     pkg_share = get_package_share_directory('simple_car_sim')
     
     # World file
-    world_file = os.path.join(pkg_share, 'worlds', 'car_world.sdf')
+    world_file = os.path.join(pkg_share, 'worlds', 'pipe_world.sdf')
     
     # URDF file
     xacro_file = os.path.join(pkg_share, 'urdf', 'robot.urdf.xacro')
@@ -30,7 +30,9 @@ def generate_launch_description():
         executable='create',
         arguments=['-topic', 'robot_description',
                    '-name', 'simple_car',
-                   '-z', '0.5'],
+                   '-x', '0.0',
+                   '-y', '-2.5',
+                   '-z', '-0.6'],
         output='screen'
     )
 
