@@ -1,0 +1,33 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Selection
+    Name: Selection
+  - Class: rviz_common/ToolProperties
+    Name: Tool Properties
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: rviz_common/VisualizationManager
+  Displays:
+    - Class: rviz_common/RobotModel
+      Enabled: true
+      Name: RobotModel
+      Robot Description: robot_description
+    - Class: rviz_common/TF
+      Enabled: true
+      Name: TF
+    - Class: rviz_common/Odometry
+      Enabled: true
+      Name: Odom
+      Topic: /diff_drive_controller/odom
+  Global Options:
+    Fixed Frame: base_link
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 2.0

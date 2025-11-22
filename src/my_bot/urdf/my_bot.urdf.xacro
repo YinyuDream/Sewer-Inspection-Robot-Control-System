@@ -1,0 +1,123 @@
+<?xml version="1.0"?>
+<robot name="my_bot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- Parameters -->
+  <xacro:property name="wheel_radius" value="0.05"/>
+  <xacro:property name="wheel_width" value="0.02"/>
+  <xacro:property name="base_length" value="0.30"/>
+  <xacro:property name="base_width" value="0.22"/>
+  <xacro:property name="base_height" value="0.05"/>
+
+  <!-- Base link -->
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="4.0"/>
+      <inertia ixx="0.02" ixy="0.0" ixz="0.0" iyy="0.02" iyz="0.0" izz="0.03"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 ${base_height/2}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${base_length} ${base_width} ${base_height}"/>
+      </geometry>
+      <material name="grey">
+        <color rgba="0.6 0.6 0.6 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${base_height/2}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${base_length} ${base_width} ${base_height}"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Macro for wheel -->
+  <xacro:macro name="wheel" params="name x y">
+    <link name="${name}">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.2"/>
+        <inertia ixx="0.0005" ixy="0" ixz="0" iyy="0.0005" iyz="0" izz="0.0009"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+        <geometry>
+          <cylinder length="${wheel_width}" radius="${wheel_radius}"/>
+        </geometry>
+        <material name="black">
+          <color rgba="0.1 0.1 0.1 1"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+        <geometry>
+          <cylinder length="${wheel_width}" radius="${wheel_radius}"/>
+        </geometry>
+      </collision>
+    </link>
+    <joint name="${name}_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${name}"/>
+      <origin xyz="${x} ${y} ${wheel_radius}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <dynamics damping="0.2" friction="0.0"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- Wheels positions -->
+  <xacro:wheel name="left_front_wheel"  x="${ base_length/2 - 0.05 }" y="${ base_width/2 }"/>
+  <xacro:wheel name="left_rear_wheel"   x="${ -base_length/2 + 0.05 }" y="${ base_width/2 }"/>
+  <xacro:wheel name="right_front_wheel" x="${ base_length/2 - 0.05 }" y="${ -base_width/2 }"/>
+  <xacro:wheel name="right_rear_wheel"  x="${ -base_length/2 + 0.05 }" y="${ -base_width/2 }"/>
+
+  <!-- ros2_control configuration embedded -->
+  <ros2_control name="MyBotSystem" type="system">
+    <hardware>
+      <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+    </hardware>
+    <joint name="left_front_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="left_rear_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="right_front_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="right_rear_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+  <!-- Gazebo plugin to integrate ros2_control -->
+  <gazebo>
+    <plugin name="gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+      <parameters>$(find my_bot)/config/ros2_control.yaml</parameters>
+    </plugin>
+  </gazebo>
+
+  <!-- Simple collision with ground contact (optional friction tuning) -->
+  <gazebo reference="base_link">
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="left_front_wheel">
+    <material>Gazebo/Black</material>
+  </gazebo>
+  <gazebo reference="left_rear_wheel">
+    <material>Gazebo/Black</material>
+  </gazebo>
+  <gazebo reference="right_front_wheel">
+    <material>Gazebo/Black</material>
+  </gazebo>
+  <gazebo reference="right_rear_wheel">
+    <material>Gazebo/Black</material>
+  </gazebo>
+</robot>

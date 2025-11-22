@@ -1,4 +1,0 @@
-Invoking command in '/home/yinyudream/Desktop/final_design/src/build/my_bot': CMAKE_PREFIX_PATH=/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake --build /home/yinyudream/Desktop/final_design/src/build/my_bot -- -j16 -l16
-Invoked command in '/home/yinyudream/Desktop/final_design/src/build/my_bot' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake --build /home/yinyudream/Desktop/final_design/src/build/my_bot -- -j16 -l16
-Invoking command in '/home/yinyudream/Desktop/final_design/src/build/my_bot': CMAKE_PREFIX_PATH=/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake --install /home/yinyudream/Desktop/final_design/src/build/my_bot
-Invoked command in '/home/yinyudream/Desktop/final_design/src/build/my_bot' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake --install /home/yinyudream/Desktop/final_design/src/build/my_bot
