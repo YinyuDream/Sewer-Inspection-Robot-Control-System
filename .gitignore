@@ -1,0 +1,26 @@
+# ROS 2 / colcon build artifacts
+build/
+install/
+log/
+.colcon/
+Testing/
+
+# Colcon helper scripts generated per build
+colcon_command_prefix*
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake-build-*/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Editor and OS metadata
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
