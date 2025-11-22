@@ -1,0 +1,129 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro"  name="robot">
+
+    <xacro:property name="chassis_length" value="0.3"/>
+    <xacro:property name="chassis_width" value="0.2"/>
+    <xacro:property name="chassis_height" value="0.1"/>
+    <xacro:property name="wheel_radius" value="0.05"/>
+    <xacro:property name="wheel_thickness" value="0.026"/>
+    <xacro:property name="wheel_offset_x" value="0.1"/>
+    <xacro:property name="wheel_offset_y" value="0.12"/>
+    <xacro:property name="wheel_offset_z" value="0.025"/>
+    <xacro:property name="mass" value="1.0"/>
+
+    <material name="white">
+        <color rgba="1 1 1 1" />
+    </material>
+
+    <material name="orange">
+        <color rgba="1 0.3 0.1 1"/>
+    </material>
+
+    <material name="blue">
+        <color rgba="0.2 0.2 1 1"/>
+    </material>
+
+    <material name="black">
+        <color rgba="0 0 0 1"/>
+    </material>
+
+    <!-- BASE LINK -->
+    <link name="base_link">
+    </link>
+
+    <!-- CHASSIS LINK -->
+    <joint name="chassis_joint" type="fixed">
+        <parent link="base_link"/>
+        <child link="chassis"/>
+        <origin xyz="-0.1 0 0"/>
+    </joint>
+
+    <link name="chassis">
+        <visual>
+            <origin xyz="${chassis_length/2} 0 ${chassis_height/2}"/>
+            <geometry>
+                <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+            </geometry>
+            <material name="orange"/>
+        </visual>
+        <collision>
+            <origin xyz="${chassis_length/2} 0 ${chassis_height/2}"/>
+            <geometry>
+                <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <origin xyz="${chassis_length/2} 0 ${chassis_height/2}" rpy="0 0 0"/>
+            <mass value="${mass}"/>
+            <inertia ixx="${(1/12) * mass * (chassis_width*chassis_width + chassis_height*chassis_height)}" ixy="0.0" ixz="0.0"
+                     iyy="${(1/12) * mass * (chassis_length*chassis_length + chassis_height*chassis_height)}" iyz="0.0"
+                     izz="${(1/12) * mass * (chassis_length*chassis_length + chassis_width*chassis_width)}"/>
+        </inertial>
+    </link>
+
+    <!-- WHEEL MACRO -->
+    <xacro:macro name="wheel" params="prefix x_reflect y_reflect">
+        <link name="${prefix}_wheel">
+            <visual>
+                <geometry>
+                    <cylinder radius="${wheel_radius}" length="${wheel_thickness}"/>
+                </geometry>
+                <material name="blue"/>
+            </visual>
+            <collision>
+                <geometry>
+                    <cylinder radius="${wheel_radius}" length="${wheel_thickness}"/>
+                </geometry>
+            </collision>
+            <inertial>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <mass value="0.1"/>
+                <inertia ixx="${(1/12) * 0.1 * (3*wheel_radius*wheel_radius + wheel_thickness*wheel_thickness)}" ixy="0.0" ixz="0.0"
+                         iyy="${(1/12) * 0.1 * (3*wheel_radius*wheel_radius + wheel_thickness*wheel_thickness)}" iyz="0.0"
+                         izz="${(1/2) * 0.1 * (wheel_radius*wheel_radius)}"/>
+            </inertial>
+        </link>
+
+        <joint name="${prefix}_wheel_joint" type="continuous">
+            <parent link="base_link"/>
+            <child link="${prefix}_wheel"/>
+            <origin xyz="${x_reflect * wheel_offset_x} ${y_reflect * wheel_offset_y} 0" rpy="-${pi/2} 0 0"/>
+            <axis xyz="0 0 1"/>
+        </joint>
+    </xacro:macro>
+
+    <xacro:wheel prefix="front_left" x_reflect="1" y_reflect="1" />
+    <xacro:wheel prefix="front_right" x_reflect="1" y_reflect="-1" />
+    <xacro:wheel prefix="rear_left" x_reflect="-1" y_reflect="1" />
+    <xacro:wheel prefix="rear_right" x_reflect="-1" y_reflect="-1" />
+
+    <!-- GAZEBO PLUGIN -->
+    <gazebo>
+        <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
+            <!-- Left wheels -->
+            <left_joint>front_left_wheel_joint</left_joint>
+            <left_joint>rear_left_wheel_joint</left_joint>
+
+            <!-- Right wheels -->
+            <right_joint>front_right_wheel_joint</right_joint>
+            <right_joint>rear_right_wheel_joint</right_joint>
+
+            <wheel_separation>${wheel_offset_y * 2}</wheel_separation>
+            <wheel_radius>${wheel_radius}</wheel_radius>
+            <odom_publish_frequency>20</odom_publish_frequency>
+            <topic>cmd_vel</topic>
+            <odom_topic>odom</odom_topic>
+            <frame_id>odom</frame_id>
+            <child_frame_id>base_link</child_frame_id>
+        </plugin>
+
+        <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
+            <topic>joint_states</topic>
+            <joint_name>front_left_wheel_joint</joint_name>
+            <joint_name>front_right_wheel_joint</joint_name>
+            <joint_name>rear_left_wheel_joint</joint_name>
+            <joint_name>rear_right_wheel_joint</joint_name>
+        </plugin>
+    </gazebo>
+
+</robot>
