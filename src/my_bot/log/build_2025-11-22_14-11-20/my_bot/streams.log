@@ -1,0 +1,84 @@
+[0.007s] Invoking command in '/home/yinyudream/Desktop/final_design/src/my_bot/build/my_bot': CMAKE_PREFIX_PATH=/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake /home/yinyudream/Desktop/final_design/src/my_bot -DCMAKE_INSTALL_PREFIX=/home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot
+[0.051s] -- The C compiler identification is GNU 11.4.0
+[0.088s] -- The CXX compiler identification is GNU 11.4.0
+[0.092s] -- Detecting C compiler ABI info
+[0.147s] -- Detecting C compiler ABI info - done
+[0.151s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.151s] -- Detecting C compile features
+[0.151s] -- Detecting C compile features - done
+[0.153s] -- Detecting CXX compiler ABI info
+[0.212s] -- Detecting CXX compiler ABI info - done
+[0.219s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.219s] -- Detecting CXX compile features
+[0.220s] -- Detecting CXX compile features - done
+[0.221s] -- Found ament_cmake: 1.3.12 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.443s] -- Found Python3: /home/yinyudream/miniconda3/bin/python3 (found version "3.12.9") found components: Interpreter 
+[0.504s] -- Found ament_lint_auto: 0.12.14 (/opt/ros/humble/share/ament_lint_auto/cmake)
+[0.584s] -- Added test 'cppcheck' to perform static code analysis on C / C++ code
+[0.584s] -- Configured cppcheck include dirs: 
+[0.584s] -- Configured cppcheck exclude dirs and/or files: 
+[0.584s] -- Added test 'flake8' to check Python code syntax and style conventions
+[0.585s] -- Added test 'lint_cmake' to check CMake code style
+[0.585s] -- Added test 'pep257' to check Python code against some of the docstring style conventions in PEP 257
+[0.587s] -- Added test 'uncrustify' to check C / C++ code style
+[0.587s] -- Configured uncrustify additional arguments: 
+[0.588s] -- Added test 'xmllint' to check XML markup files
+[0.588s] -- Configuring done
+[0.590s] -- Generating done
+[0.591s] -- Build files have been written to: /home/yinyudream/Desktop/final_design/src/my_bot/build/my_bot
+[0.595s] Invoked command in '/home/yinyudream/Desktop/final_design/src/my_bot/build/my_bot' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake /home/yinyudream/Desktop/final_design/src/my_bot -DCMAKE_INSTALL_PREFIX=/home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot
+[0.595s] Invoking command in '/home/yinyudream/Desktop/final_design/src/my_bot/build/my_bot': CMAKE_PREFIX_PATH=/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake --build /home/yinyudream/Desktop/final_design/src/my_bot/build/my_bot -- -j16 -l16
+[0.635s] Built target ament_cmake_python_copy_my_bot
+[0.754s] running egg_info
+[0.761s] creating my_bot.egg-info
+[0.761s] writing my_bot.egg-info/PKG-INFO
+[0.762s] writing dependency_links to my_bot.egg-info/dependency_links.txt
+[0.762s] writing top-level names to my_bot.egg-info/top_level.txt
+[0.762s] writing manifest file 'my_bot.egg-info/SOURCES.txt'
+[0.787s] reading manifest file 'my_bot.egg-info/SOURCES.txt'
+[0.787s] writing manifest file 'my_bot.egg-info/SOURCES.txt'
+[0.806s] Built target ament_cmake_python_build_my_bot_egg
+[0.815s] Invoked command in '/home/yinyudream/Desktop/final_design/src/my_bot/build/my_bot' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake --build /home/yinyudream/Desktop/final_design/src/my_bot/build/my_bot -- -j16 -l16
+[0.822s] Invoking command in '/home/yinyudream/Desktop/final_design/src/my_bot/build/my_bot': CMAKE_PREFIX_PATH=/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake --install /home/yinyudream/Desktop/final_design/src/my_bot/build/my_bot
+[0.828s] -- Install configuration: ""
+[0.828s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/environment/pythonpath.sh
+[0.828s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/environment/pythonpath.dsv
+[0.828s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/python3.12/site-packages/my_bot-0.0.0-py3.12.egg-info
+[0.828s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/python3.12/site-packages/my_bot-0.0.0-py3.12.egg-info/PKG-INFO
+[0.828s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/python3.12/site-packages/my_bot-0.0.0-py3.12.egg-info/dependency_links.txt
+[0.828s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/python3.12/site-packages/my_bot-0.0.0-py3.12.egg-info/SOURCES.txt
+[0.828s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/python3.12/site-packages/my_bot-0.0.0-py3.12.egg-info/top_level.txt
+[0.829s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/python3.12/site-packages/my_bot
+[0.829s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/python3.12/site-packages/my_bot/diff_drive_controller.py
+[0.829s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/python3.12/site-packages/my_bot/__init__.py
+[0.829s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/python3.12/site-packages/my_bot/keyboard_control.py
+[0.853s] Listing '/home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/python3.12/site-packages/my_bot'...
+[0.853s] Compiling '/home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/python3.12/site-packages/my_bot/__init__.py'...
+[0.853s] Compiling '/home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/python3.12/site-packages/my_bot/diff_drive_controller.py'...
+[0.853s] Compiling '/home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/python3.12/site-packages/my_bot/keyboard_control.py'...
+[0.857s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/my_bot/keyboard_control.py
+[0.857s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/lib/my_bot/diff_drive_controller.py
+[0.857s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/launch
+[0.857s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/launch/my_bot_launch.py
+[0.857s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/urdf
+[0.857s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/urdf/my_bot.urdf.xacro
+[0.857s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/config
+[0.857s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/config/my_bot.rviz
+[0.857s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/worlds
+[0.857s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/worlds/empty.world
+[0.857s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/ament_index/resource_index/package_run_dependencies/my_bot
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/ament_index/resource_index/parent_prefix_path/my_bot
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/environment/ament_prefix_path.sh
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/environment/ament_prefix_path.dsv
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/environment/path.sh
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/environment/path.dsv
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/local_setup.bash
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/local_setup.sh
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/local_setup.zsh
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/local_setup.dsv
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/package.dsv
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/ament_index/resource_index/packages/my_bot
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/cmake/my_botConfig.cmake
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/cmake/my_botConfig-version.cmake
+[0.858s] -- Installing: /home/yinyudream/Desktop/final_design/src/my_bot/install/my_bot/share/my_bot/package.xml
+[0.860s] Invoked command in '/home/yinyudream/Desktop/final_design/src/my_bot/build/my_bot' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake --install /home/yinyudream/Desktop/final_design/src/my_bot/build/my_bot
