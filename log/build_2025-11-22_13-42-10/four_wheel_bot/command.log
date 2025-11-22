@@ -1,0 +1,2 @@
+Invoking command in '/home/yinyudream/Desktop/final_design/build/four_wheel_bot': CMAKE_PREFIX_PATH=/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake /home/yinyudream/Desktop/final_design -DCMAKE_INSTALL_PREFIX=/home/yinyudream/Desktop/final_design/install/four_wheel_bot
+Invoked command in '/home/yinyudream/Desktop/final_design/build/four_wheel_bot' returned '1': CMAKE_PREFIX_PATH=/opt/ros/humble CONDA_PROMPT_MODIFIER=(base) /usr/bin/cmake /home/yinyudream/Desktop/final_design -DCMAKE_INSTALL_PREFIX=/home/yinyudream/Desktop/final_design/install/four_wheel_bot

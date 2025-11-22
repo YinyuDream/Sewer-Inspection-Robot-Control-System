@@ -1,1 +1,0 @@
-controller_manager:diff_drive_controller:geometry_msgs:joint_state_broadcaster:nav_msgs:rclcpp:rclpy:robot_state_publisher:ros2_control:ros2_controllers:ros_gz_sim:sensor_msgs:std_msgs:xacro

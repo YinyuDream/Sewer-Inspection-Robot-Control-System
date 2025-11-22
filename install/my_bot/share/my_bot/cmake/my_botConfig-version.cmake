@@ -1,1 +1,0 @@
-/home/yinyudream/Desktop/final_design/build/my_bot/ament_cmake_core/my_botConfig-version.cmake
