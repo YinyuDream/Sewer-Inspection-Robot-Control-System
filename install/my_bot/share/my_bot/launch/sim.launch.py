@@ -1,1 +1,0 @@
-/home/yinyudream/Desktop/final_design/build/my_bot/launch/sim.launch.py
