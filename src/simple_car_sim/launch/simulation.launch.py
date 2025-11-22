@@ -29,10 +29,13 @@ def generate_launch_description():
         package='ros_gz_sim',
         executable='create',
         arguments=['-topic', 'robot_description',
-                   '-name', 'simple_car',
+                   '-name', 'simple_car_v2',
                    '-x', '0.0',
                    '-y', '-2.5',
-                   '-z', '-0.6'],
+                   '-z', '-0.6',
+                   '-R', '0.0',
+                   '-P', '0.0',
+                   '-Y', '0.0'],
         output='screen'
     )
 
@@ -51,10 +54,19 @@ def generate_launch_description():
         package='ros_gz_bridge',
         executable='parameter_bridge',
         arguments=[
-            '/cmd_vel@geometry_msgs/msg/Twist@ignition.msgs.Twist',
-            '/odom@nav_msgs/msg/Odometry@ignition.msgs.Odometry',
-            '/tf@tf2_msgs/msg/TFMessage@ignition.msgs.Pose_V',
-            '/joint_states@sensor_msgs/msg/JointState@ignition.msgs.Model'
+            # Joint states
+            '/joint_states@sensor_msgs/msg/JointState@ignition.msgs.Model',
+            # Wheel velocity control
+            '/model/simple_car_v2/joint/front_left_wheel_joint/cmd_vel@std_msgs/msg/Float64@ignition.msgs.Double',
+            '/model/simple_car_v2/joint/rear_left_wheel_joint/cmd_vel@std_msgs/msg/Float64@ignition.msgs.Double',
+            '/model/simple_car_v2/joint/front_right_wheel_joint/cmd_vel@std_msgs/msg/Float64@ignition.msgs.Double',
+            '/model/simple_car_v2/joint/rear_right_wheel_joint/cmd_vel@std_msgs/msg/Float64@ignition.msgs.Double',
+        ],
+        remappings=[
+            ('/model/simple_car_v2/joint/front_left_wheel_joint/cmd_vel', '/simple_car/front_left_wheel_vel'),
+            ('/model/simple_car_v2/joint/rear_left_wheel_joint/cmd_vel', '/simple_car/rear_left_wheel_vel'),
+            ('/model/simple_car_v2/joint/front_right_wheel_joint/cmd_vel', '/simple_car/front_right_wheel_vel'),
+            ('/model/simple_car_v2/joint/rear_right_wheel_joint/cmd_vel', '/simple_car/rear_right_wheel_vel'),
         ],
         output='screen'
     )

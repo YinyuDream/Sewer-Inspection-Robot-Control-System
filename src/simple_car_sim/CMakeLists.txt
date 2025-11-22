@@ -32,7 +32,13 @@ install(DIRECTORY
   urdf
   worlds
   rviz
+  scripts
   DESTINATION share/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  scripts/keyboard_control.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 ament_package()

@@ -197,6 +197,14 @@ def generate_sdf(obj_path, sdf_path):
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100.0</mu>
+                <mu2>100.0</mu2>
+              </ode>
+            </friction>
+          </surface>
         </collision>
         <visual name="visual">
           <geometry>
