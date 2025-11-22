@@ -1,8 +1,0 @@
-setup.py
-my_bot/__init__.py
-my_bot/diff_drive_controller.py
-my_bot/keyboard_control.py
-my_bot.egg-info/PKG-INFO
-my_bot.egg-info/SOURCES.txt
-my_bot.egg-info/dependency_links.txt
-my_bot.egg-info/top_level.txt
