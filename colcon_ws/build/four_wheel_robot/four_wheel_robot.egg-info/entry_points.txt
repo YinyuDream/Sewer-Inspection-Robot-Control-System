@@ -1,0 +1,3 @@
+[console_scripts]
+keyboard_teleop = four_wheel_robot.keyboard_teleop:main
+
