@@ -1,0 +1,3 @@
+[console_scripts]
+imu_odom_logger = my_bot.imu_odom_logger:main
+
