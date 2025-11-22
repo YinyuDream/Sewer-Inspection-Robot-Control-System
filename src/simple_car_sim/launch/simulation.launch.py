@@ -61,12 +61,17 @@ def generate_launch_description():
             '/model/simple_car_v2/joint/rear_left_wheel_joint/cmd_vel@std_msgs/msg/Float64@ignition.msgs.Double',
             '/model/simple_car_v2/joint/front_right_wheel_joint/cmd_vel@std_msgs/msg/Float64@ignition.msgs.Double',
             '/model/simple_car_v2/joint/rear_right_wheel_joint/cmd_vel@std_msgs/msg/Float64@ignition.msgs.Double',
+            # IMU
+            '/imu@sensor_msgs/msg/Imu@ignition.msgs.IMU',
+            # Odometry (Ground Truth)
+            '/model/simple_car_v2/odometry@nav_msgs/msg/Odometry@ignition.msgs.Odometry',
         ],
         remappings=[
             ('/model/simple_car_v2/joint/front_left_wheel_joint/cmd_vel', '/simple_car/front_left_wheel_vel'),
             ('/model/simple_car_v2/joint/rear_left_wheel_joint/cmd_vel', '/simple_car/rear_left_wheel_vel'),
             ('/model/simple_car_v2/joint/front_right_wheel_joint/cmd_vel', '/simple_car/front_right_wheel_vel'),
             ('/model/simple_car_v2/joint/rear_right_wheel_joint/cmd_vel', '/simple_car/rear_right_wheel_vel'),
+            ('/model/simple_car_v2/odometry', '/odom'),
         ],
         output='screen'
     )

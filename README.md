@@ -53,7 +53,7 @@ ros2 launch simple_car_sim simulation.launch.py
 
 ```bash
 source install/setup.bash
-ros2 run teleop_twist_keyboard teleop_twist_keyboard
+ros2 run simple_car_sim keyboard_control.py
 ```
 
 按照屏幕提示使用键盘（`i`, `j`, `l`, `,` 等）控制小车移动。
