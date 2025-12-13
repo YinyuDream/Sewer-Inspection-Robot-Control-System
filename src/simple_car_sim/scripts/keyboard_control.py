@@ -8,20 +8,35 @@ from rclpy.node import Node
 from std_msgs.msg import Float64
 
 msg = """
-Control Your Car!
+Control Your Pipeline Robot!
 ---------------------------
 Moving around:
         w
    a    s    d
 
-w/s : increase/decrease linear velocity (both wheels)
-a/d : increase/decrease differential velocity (turn left/right)
+Arm Control:
+        i
+   j    k    l
+
+Expansion Control:
+   u : Expand All (Stick to wall)
+   o : Contract All (Release)
+
+w/s : increase/decrease linear velocity (all wheels)
+a/d : increase/decrease rotational velocity (left/right differential)
+i/k : pitch up/down (arm)
+j/l : yaw left/right (arm)
+u/o : expand/contract legs
+
 space: force stop
 q   : quit
 
 Current speeds:
-Left:  {left:.2f}
-Right: {right:.2f}
+Linear:  {linear:.2f}
+Angular: {angular:.2f}
+Pitch:   {pitch:.2f}
+Yaw:     {yaw:.2f}
+Expansion: {expansion:.2f}
 """
 
 class KeyboardController(Node):
@@ -29,14 +44,36 @@ class KeyboardController(Node):
         super().__init__('keyboard_controller')
         
         # Publishers for 4 wheels
-        self.pub_fl = self.create_publisher(Float64, '/simple_car/front_left_wheel_vel', 10)
-        self.pub_fr = self.create_publisher(Float64, '/simple_car/front_right_wheel_vel', 10)
-        self.pub_rl = self.create_publisher(Float64, '/simple_car/rear_left_wheel_vel', 10)
-        self.pub_rr = self.create_publisher(Float64, '/simple_car/rear_right_wheel_vel', 10)
+        self.pub_top = self.create_publisher(Float64, '/simple_car/top_wheel_vel', 10)
+        self.pub_bottom = self.create_publisher(Float64, '/simple_car/bottom_wheel_vel', 10)
+        self.pub_left = self.create_publisher(Float64, '/simple_car/left_wheel_vel', 10)
+        self.pub_right = self.create_publisher(Float64, '/simple_car/right_wheel_vel', 10)
         
-        self.left_vel = 0.0
-        self.right_vel = 0.0
+        # Publishers for Arm
+        self.pub_pitch = self.create_publisher(Float64, '/simple_car/joint_pitch_vel', 10)
+        self.pub_yaw = self.create_publisher(Float64, '/simple_car/joint_yaw_vel', 10)
+        
+        # Publishers for Expansion (Drive Section)
+        self.pub_drive_exp_top = self.create_publisher(Float64, '/simple_car/drive_exp_top_vel', 10)
+        self.pub_drive_exp_bottom = self.create_publisher(Float64, '/simple_car/drive_exp_bottom_vel', 10)
+        self.pub_drive_exp_left = self.create_publisher(Float64, '/simple_car/drive_exp_left_vel', 10)
+        self.pub_drive_exp_right = self.create_publisher(Float64, '/simple_car/drive_exp_right_vel', 10)
+        
+        # Publishers for Expansion (Functional Section)
+        self.pub_func_exp_top = self.create_publisher(Float64, '/simple_car/func_exp_top_vel', 10)
+        self.pub_func_exp_bottom = self.create_publisher(Float64, '/simple_car/func_exp_bottom_vel', 10)
+        self.pub_func_exp_left = self.create_publisher(Float64, '/simple_car/func_exp_left_vel', 10)
+        self.pub_func_exp_right = self.create_publisher(Float64, '/simple_car/func_exp_right_vel', 10)
+        
+        self.linear_vel = 0.0
+        self.angular_vel = 0.0
+        self.pitch_vel = 0.0
+        self.yaw_vel = 0.0
+        self.expansion_vel = 0.0
+        
         self.step = 1.0
+        self.arm_step = 0.5
+        self.exp_step = 0.5 # Increased expansion speed
         self.settings = termios.tcgetattr(sys.stdin)
 
     def getKey(self):
@@ -50,46 +87,88 @@ class KeyboardController(Node):
         return key
 
     def publish_speeds(self):
+        # Left = linear - angular
+        # Right = linear + angular
+        # Top = linear
+        # Bottom = linear
+        
         msg_l = Float64()
-        msg_l.data = self.left_vel
+        msg_l.data = self.linear_vel - self.angular_vel
+        
         msg_r = Float64()
-        msg_r.data = self.right_vel
+        msg_r.data = self.linear_vel + self.angular_vel
         
-        # Left wheels
-        self.pub_fl.publish(msg_l)
-        self.pub_rl.publish(msg_l)
+        msg_t = Float64()
+        msg_t.data = self.linear_vel
         
-        # Right wheels
-        self.pub_fr.publish(msg_r)
-        self.pub_rr.publish(msg_r)
+        msg_b = Float64()
+        msg_b.data = self.linear_vel
+        
+        msg_pitch = Float64()
+        msg_pitch.data = self.pitch_vel
+        
+        msg_yaw = Float64()
+        msg_yaw.data = self.yaw_vel
+        
+        msg_exp = Float64()
+        msg_exp.data = self.expansion_vel
+        
+        self.pub_left.publish(msg_l)
+        self.pub_right.publish(msg_r)
+        self.pub_top.publish(msg_t)
+        self.pub_bottom.publish(msg_b)
+        self.pub_pitch.publish(msg_pitch)
+        self.pub_yaw.publish(msg_yaw)
+        
+        # Publish expansion velocity to all 8 expansion joints
+        self.pub_drive_exp_top.publish(msg_exp)
+        self.pub_drive_exp_bottom.publish(msg_exp)
+        self.pub_drive_exp_left.publish(msg_exp)
+        self.pub_drive_exp_right.publish(msg_exp)
+        
+        self.pub_func_exp_top.publish(msg_exp)
+        self.pub_func_exp_bottom.publish(msg_exp)
+        self.pub_func_exp_left.publish(msg_exp)
+        self.pub_func_exp_right.publish(msg_exp)
 
     def run(self):
         try:
-            print(msg.format(left=self.left_vel, right=self.right_vel))
+            print(msg.format(linear=self.linear_vel, angular=self.angular_vel, pitch=self.pitch_vel, yaw=self.yaw_vel, expansion=self.expansion_vel))
             while True:
                 key = self.getKey()
                 if key == 'w':
-                    self.left_vel += self.step
-                    self.right_vel += self.step
+                    self.linear_vel += self.step
                 elif key == 's':
-                    self.left_vel -= self.step
-                    self.right_vel -= self.step
+                    self.linear_vel -= self.step
                 elif key == 'a':
-                    self.left_vel -= self.step
-                    self.right_vel += self.step
+                    self.angular_vel += self.step
                 elif key == 'd':
-                    self.left_vel += self.step
-                    self.right_vel -= self.step
+                    self.angular_vel -= self.step
+                elif key == 'i':
+                    self.pitch_vel += self.arm_step
+                elif key == 'k':
+                    self.pitch_vel -= self.arm_step
+                elif key == 'j':
+                    self.yaw_vel += self.arm_step
+                elif key == 'l':
+                    self.yaw_vel -= self.arm_step
+                elif key == 'u':
+                    self.expansion_vel = self.exp_step # Expand
+                elif key == 'o':
+                    self.expansion_vel = -self.exp_step # Contract
                 elif key == ' ':
-                    self.left_vel = 0.0
-                    self.right_vel = 0.0
+                    self.linear_vel = 0.0
+                    self.angular_vel = 0.0
+                    self.pitch_vel = 0.0
+                    self.yaw_vel = 0.0
+                    self.expansion_vel = 0.0
                 elif key == 'q':
                     break
                 elif key == '\x03': # Ctrl-C
                     break
                 
-                if key in ['w', 's', 'a', 'd', ' ']:
-                    print(msg.format(left=self.left_vel, right=self.right_vel))
+                if key in ['w', 's', 'a', 'd', 'i', 'k', 'j', 'l', 'u', 'o', ' ']:
+                    print(msg.format(linear=self.linear_vel, angular=self.angular_vel, pitch=self.pitch_vel, yaw=self.yaw_vel, expansion=self.expansion_vel))
                     self.publish_speeds()
                     
         except Exception as e:
@@ -98,11 +177,22 @@ class KeyboardController(Node):
         finally:
             msg_stop = Float64()
             msg_stop.data = 0.0
-            self.pub_fl.publish(msg_stop)
-            self.pub_fr.publish(msg_stop)
-            self.pub_rl.publish(msg_stop)
-            self.pub_rr.publish(msg_stop)
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.settings)
+            self.pub_left.publish(msg_stop)
+            self.pub_right.publish(msg_stop)
+            self.pub_top.publish(msg_stop)
+            self.pub_bottom.publish(msg_stop)
+            self.pub_pitch.publish(msg_stop)
+            self.pub_yaw.publish(msg_stop)
+            
+            # Stop expansion
+            self.pub_drive_exp_top.publish(msg_stop)
+            self.pub_drive_exp_bottom.publish(msg_stop)
+            self.pub_drive_exp_left.publish(msg_stop)
+            self.pub_drive_exp_right.publish(msg_stop)
+            self.pub_func_exp_top.publish(msg_stop)
+            self.pub_func_exp_bottom.publish(msg_stop)
+            self.pub_func_exp_left.publish(msg_stop)
+            self.pub_func_exp_right.publish(msg_stop)
 
 def main(args=None):
     rclpy.init(args=args)

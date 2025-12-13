@@ -1,155 +1,327 @@
 <?xml version="1.0"?>
-<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="simple_car">
+<robot name="pipeline_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- Inertial Macros -->
-  <xacro:macro name="box_inertia" params="m x y z">
-    <inertial>
-      <mass value="${m}"/>
-      <inertia ixx="${m*(y*y+z*z)/12}" ixy="0" ixz="0"
-               iyy="${m*(x*x+z*z)/12}" iyz="0"
-               izz="${m*(x*x+y*y)/12}"/>
-    </inertial>
-  </xacro:macro>
+    <!-- ========================================================== -->
+    <!--                     1. 属性与常数定义                      -->
+    <!-- ========================================================== -->
+    
+    <!-- 尺寸参数 (单位: 米) - 放大 3 倍 -->
+    <xacro:property name="body_len" value="0.75" />
+    <xacro:property name="body_width" value="0.54" />
+    <xacro:property name="body_height" value="0.54" />
+    
+    <xacro:property name="wheel_radius" value="0.18" />
+    <xacro:property name="wheel_width" value="0.15" />
+    <xacro:property name="wheel_offset" value="0.36" /> <!-- 轮子离中心的距离 -->
+    
+    <xacro:property name="leg_radius" value="0.045" />
+    <xacro:property name="leg_length" value="0.3" />
 
-  <xacro:macro name="cylinder_inertia" params="m r h">
-    <inertial>
-      <mass value="${m}"/>
-      <inertia ixx="${m*(3*r*r+h*h)/12}" ixy="0" ixz="0"
-               iyy="${m*(3*r*r+h*h)/12}" iyz="0"
-               izz="${m*r*r/2}"/>
-    </inertial>
-  </xacro:macro>
+    <!-- 质量参数 (用于惯性矩阵计算) - 增加质量 -->
+    <xacro:property name="mass_body" value="20.0" />
+    <xacro:property name="mass_wheel" value="2.0" />
+    <xacro:property name="mass_leg" value="1.0" />
 
-  <!-- Base Link -->
-  <link name="base_link">
-    <visual>
-      <geometry>
-        <box size="0.5 0.3 0.1"/>
-      </geometry>
-      <material name="blue">
-        <color rgba="0 0 1 1"/>
-      </material>
-    </visual>
-    <collision>
-      <geometry>
-        <box size="0.5 0.3 0.1"/>
-      </geometry>
-    </collision>
-    <xacro:box_inertia m="5.0" x="0.5" y="0.3" z="0.1"/>
-  </link>
+    <!-- 材质颜色 -->
+    <material name="blue">
+        <color rgba="0.0 0.4 0.8 1.0"/>
+    </material>
+    <material name="black">
+        <color rgba="0.1 0.1 0.1 1.0"/>
+    </material>
+    <material name="grey">
+        <color rgba="0.6 0.6 0.6 1.0"/>
+    </material>
+    <material name="orange">
+        <color rgba="1.0 0.5 0.0 1.0"/>
+    </material>
 
-  <!-- Wheels -->
-  <xacro:macro name="wheel" params="name x y">
-    <link name="${name}_wheel">
-      <visual>
-        <geometry>
-          <cylinder radius="0.1" length="0.05"/>
-        </geometry>
-        <material name="black">
-          <color rgba="0 0 0 1"/>
-        </material>
-      </visual>
-      <collision>
-        <geometry>
-          <cylinder radius="0.1" length="0.05"/>
-        </geometry>
-        <surface>
-          <friction>
-            <ode>
-              <mu>100.0</mu>
-              <mu2>100.0</mu2>
-              <fdir1>1 0 0</fdir1>
-              <slip1>0.0</slip1>
-              <slip2>0.0</slip2>
-            </ode>
-          </friction>
-          <contact>
-            <ode>
-              <min_depth>0.005</min_depth>
-              <kp>1e8</kp>
-            </ode>
-          </contact>
-        </surface>
-      </collision>
-      <xacro:cylinder_inertia m="1.0" r="0.1" h="0.05"/>
+    <!-- ========================================================== -->
+    <!--                     2. 通用宏定义 (Macros)                 -->
+    <!-- ========================================================== -->
+
+    <!-- 惯性矩阵宏: 盒子 -->
+    <xacro:macro name="box_inertial" params="mass x y z">
+        <inertial>
+            <mass value="${mass}" />
+            <inertia ixx="${(1/12) * mass * (y*y + z*z)}" ixy="0.0" ixz="0.0"
+                     iyy="${(1/12) * mass * (x*x + z*z)}" iyz="0.0"
+                     izz="${(1/12) * mass * (x*x + y*y)}" />
+        </inertial>
+    </xacro:macro>
+
+    <!-- 惯性矩阵宏: 圆柱 -->
+    <xacro:macro name="cylinder_inertial" params="mass r h">
+        <inertial>
+            <mass value="${mass}" />
+            <inertia ixx="${(1/12) * mass * (3*r*r + h*h)}" ixy="0.0" ixz="0.0"
+                     iyy="${(1/12) * mass * (3*r*r + h*h)}" iyz="0.0"
+                     izz="${(1/2) * mass * r*r}" />
+        </inertial>
+    </xacro:macro>
+
+    <!-- ========================================================== -->
+    <!--               3. 驱动节 (Drive Section - Right)            -->
+    <!-- ========================================================== -->
+
+    <!-- Base Link: 机器人的主体 (驱动节盒子) -->
+    <link name="base_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <box size="${body_len} ${body_width} ${body_height}"/>
+            </geometry>
+            <material name="blue"/>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <box size="${body_len} ${body_width} ${body_height}"/>
+            </geometry>
+        </collision>
+        <xacro:box_inertial mass="${mass_body}" x="${body_len}" y="${body_width}" z="${body_height}" />
     </link>
 
-    <joint name="${name}_wheel_joint" type="continuous">
-      <parent link="base_link"/>
-      <child link="${name}_wheel"/>
-      <origin xyz="${x} ${y} -0.05" rpy="-1.5707 0 0"/>
-      <axis xyz="0 0 1"/>
-    </joint>
-  </xacro:macro>
+    <!-- 驱动轮宏定义 (带伸缩) -->
+    <!-- 参数: location(位置名称), xyz_offset(初始位置), rpy_offset(旋转), axis_dir(伸缩方向) -->
+    <xacro:macro name="expandable_drive_wheel" params="location xyz_offset rpy_offset">
+        
+        <!-- 伸缩腿连杆 -->
+        <link name="drive_leg_${location}_link">
+            <visual>
+                <geometry><box size="0.05 0.05 0.1"/></geometry> <!-- 简单的腿部形状 -->
+                <origin xyz="0 0 0.05" rpy="0 0 0"/>
+                <material name="grey"/>
+            </visual>
+            <xacro:box_inertial mass="0.2" x="0.05" y="0.05" z="0.1"/>
+        </link>
 
-  <!-- Increased y offset to avoid collision with base_link (0.15 + 0.025 + gap) -->
-  <xacro:wheel name="front_left" x="0.15" y="0.2"/>
-  <xacro:wheel name="front_right" x="0.15" y="-0.2"/>
-  <xacro:wheel name="rear_left" x="-0.15" y="0.2"/>
-  <xacro:wheel name="rear_right" x="-0.15" y="-0.2"/>
+        <!-- 伸缩关节 -->
+        <joint name="drive_expansion_joint_${location}" type="prismatic">
+            <parent link="base_link"/>
+            <child link="drive_leg_${location}_link"/>
+            <origin xyz="${xyz_offset}" rpy="${rpy_offset}"/>
+            <axis xyz="0 0 1"/> <!-- 沿局部Z轴伸缩 -->
+            <limit lower="0.0" upper="0.8" effort="5000.0" velocity="0.5"/>
+        </joint>
 
-  <!-- IMU Sensor -->
-  <link name="imu_link">
-    <visual>
-      <geometry>
-        <box size="0.05 0.05 0.05"/>
-      </geometry>
-      <material name="black">
-        <color rgba="0 0 0 1"/>
-      </material>
-    </visual>
-    <collision>
-      <geometry>
-        <box size="0.05 0.05 0.05"/>
-      </geometry>
-    </collision>
-    <xacro:box_inertia m="0.1" x="0.05" y="0.05" z="0.05"/>
-  </link>
+        <!-- 驱动轮 -->
+        <link name="drive_wheel_${location}_link">
+            <visual>
+                <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+                <origin rpy="${pi/2} 0 0"/>
+                <material name="black"/>
+            </visual>
+            <collision>
+                <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+                <origin rpy="${pi/2} 0 0"/>
+            </collision>
+            <xacro:cylinder_inertial mass="${mass_wheel}" r="${wheel_radius}" h="${wheel_width}"/>
+        </link>
 
-  <joint name="imu_joint" type="fixed">
-    <parent link="base_link"/>
-    <child link="imu_link"/>
-    <origin xyz="0 0 0.1" rpy="0 0 0"/>
-  </joint>
+        <gazebo reference="drive_wheel_${location}_link">
+            <mu1>100.0</mu1>
+            <mu2>100.0</mu2>
+            <kp>1000000.0</kp>
+            <kd>1.0</kd>
+            <minDepth>0.001</minDepth>
+        </gazebo>
 
-  <gazebo reference="imu_link">
-    <sensor name="imu_sensor" type="imu">
-      <always_on>1</always_on>
-      <update_rate>100</update_rate>
-      <visualize>true</visualize>
-      <topic>imu</topic>
-    </sensor>
-  </gazebo>
+        <!-- 驱动关节 -->
+        <joint name="drive_wheel_${location}_joint" type="continuous">
+            <parent link="drive_leg_${location}_link"/>
+            <child link="drive_wheel_${location}_link"/>
+            <origin xyz="0 0 0.1" rpy="0 0 0"/> <!-- 安装在腿的末端 -->
+            <axis xyz="0 1 0"/>
+        </joint>
+    </xacro:macro>
 
-  <!-- Gazebo Plugins for Joint Control -->
-  <gazebo>
-    <!-- IMU Plugin -->
-    <plugin filename="ignition-gazebo-imu-system" name="ignition::gazebo::systems::Imu">
-    </plugin>
-
-    <!-- Odometry Publisher (Ground Truth) -->
-    <plugin filename="ignition-gazebo-odometry-publisher-system" name="ignition::gazebo::systems::OdometryPublisher">
-      <odom_frame>odom</odom_frame>
-      <robot_base_frame>base_link</robot_base_frame>
-      <dimensions>3</dimensions>
-    </plugin>
-
-    <plugin filename="ignition-gazebo-joint-controller-system" name="ignition::gazebo::systems::JointController">
-      <joint_name>front_left_wheel_joint</joint_name>
-    </plugin>
-    <plugin filename="ignition-gazebo-joint-controller-system" name="ignition::gazebo::systems::JointController">
-      <joint_name>rear_left_wheel_joint</joint_name>
-    </plugin>
-    <plugin filename="ignition-gazebo-joint-controller-system" name="ignition::gazebo::systems::JointController">
-      <joint_name>front_right_wheel_joint</joint_name>
-    </plugin>
-    <plugin filename="ignition-gazebo-joint-controller-system" name="ignition::gazebo::systems::JointController">
-      <joint_name>rear_right_wheel_joint</joint_name>
-    </plugin>
+    <!-- 实例化4个可伸缩驱动轮 -->
     
-    <!-- Joint State Publisher -->
-    <plugin filename="ignition-gazebo-joint-state-publisher-system" name="ignition::gazebo::systems::JointStatePublisher">
-    </plugin>
-  </gazebo>
+    <!-- Top Wheel -->
+    <xacro:expandable_drive_wheel location="top" xyz_offset="0 0 ${wheel_offset}" rpy_offset="0 0 0"/>
+
+    <!-- Bottom Wheel -->
+    <xacro:expandable_drive_wheel location="bottom" xyz_offset="0 0 -${wheel_offset}" rpy_offset="${pi} 0 0"/>
+
+    <!-- Left Wheel -->
+    <xacro:expandable_drive_wheel location="left" xyz_offset="0 ${wheel_offset} 0" rpy_offset="-${pi/2} 0 0"/>
+
+    <!-- Right Wheel -->
+    <xacro:expandable_drive_wheel location="right" xyz_offset="0 -${wheel_offset} 0" rpy_offset="${pi/2} 0 0"/>
+
+
+
+    <!-- ========================================================== -->
+    <!--             4. 机械臂连接节 (Joint Section - Middle)       -->
+    <!-- ========================================================== -->
+
+    <!-- 中间虚拟连接杆 (Universal Joint Center) -->
+    <link name="universal_joint_link">
+        <visual>
+            <geometry><sphere radius="0.08"/></geometry>
+            <material name="grey"/>
+        </visual>
+        <xacro:box_inertial mass="0.5" x="0.1" y="0.1" z="0.1"/>
+    </link>
+
+    <!-- 关节1: Pitch (俯仰 - 绕Y轴) -->
+    <joint name="joint_pitch" type="revolute">
+        <parent link="base_link"/>
+        <child link="universal_joint_link"/>
+        <origin xyz="-${body_len/2 + 0.08} 0 0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-0.8" upper="0.8" effort="100.0" velocity="0.5"/>
+    </joint>
+
+    <!-- 功能节的主体基座 -->
+    <link name="func_base_link">
+        <visual>
+            <geometry>
+                <box size="${body_len} ${body_width} ${body_height}"/>
+            </geometry>
+            <material name="blue"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="${body_len} ${body_width} ${body_height}"/>
+            </geometry>
+        </collision>
+        <xacro:box_inertial mass="${mass_body}" x="${body_len}" y="${body_width}" z="${body_height}" />
+    </link>
+
+    <!-- 关节2: Yaw (偏航 - 绕Z轴) -->
+    <joint name="joint_yaw" type="revolute">
+        <parent link="universal_joint_link"/>
+        <child link="func_base_link"/>
+        <origin xyz="-0.12 0 0" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-0.8" upper="0.8" effort="100.0" velocity="0.5"/>
+    </joint>
+
+
+    <!-- ========================================================== -->
+    <!--            5. 功能节 (Functional Section - Left)           -->
+    <!-- ========================================================== -->
+
+    <!-- 伸缩腿宏定义 (Prismatic Leg + Passive Wheel) -->
+    <!-- 参数: suffix(名称后缀), xyz_offset(位置), rpy_offset(旋转) -->
+    <xacro:macro name="expansion_leg" params="suffix xyz_offset rpy_offset axis_dir">
+        
+        <!-- 腿部连杆 -->
+        <link name="leg_${suffix}_link">
+            <visual>
+                <geometry>
+                    <cylinder radius="${leg_radius}" length="${leg_length}"/>
+                </geometry>
+                <!-- 腿沿着Z轴方向 -->
+                <origin xyz="0 0 ${leg_length/2}" rpy="0 0 0"/>
+                <material name="orange"/>
+            </visual>
+            <collision>
+                 <geometry>
+                    <cylinder radius="${leg_radius}" length="${leg_length}"/>
+                </geometry>
+                <origin xyz="0 0 ${leg_length/2}" rpy="0 0 0"/>
+            </collision>
+            <xacro:cylinder_inertial mass="${mass_leg}" r="${leg_radius}" h="${leg_length}"/>
+        </link>
+
+        <!-- 伸缩关节 (Prismatic) - 模拟剪叉张开 -->
+        <joint name="expansion_joint_${suffix}" type="prismatic">
+            <parent link="func_base_link"/>
+            <child link="leg_${suffix}_link"/>
+            <origin xyz="${xyz_offset}" rpy="${rpy_offset}"/>
+            <!-- 沿着局部坐标系的Z轴伸缩 -->
+            <axis xyz="0 0 1"/> 
+            <limit lower="0.0" upper="0.8" effort="5000.0" velocity="0.5"/>
+        </joint>
+
+        <!-- 被动轮 (Passive Wheel) -->
+        <link name="passive_wheel_${suffix}_link">
+            <visual>
+                <geometry>
+                    <sphere radius="0.04"/> <!-- 简化为球轮 -->
+                </geometry>
+                <material name="black"/>
+            </visual>
+             <collision>
+                <geometry>
+                    <sphere radius="0.04"/>
+                </geometry>
+            </collision>
+            <xacro:box_inertial mass="0.1" x="0.08" y="0.08" z="0.08"/>
+        </link>
+
+        <gazebo reference="passive_wheel_${suffix}_link">
+            <mu1>0.1</mu1> <!-- 被动轮摩擦力小一点，方便滑动? 不，它是支撑轮，应该也要有摩擦力防止打滑，但如果是万向轮... 这里简化为球轮 -->
+            <mu2>0.1</mu2>
+            <kp>1000000.0</kp>
+            <kd>1.0</kd>
+        </gazebo>
+
+        <!-- 轮子关节 (Continuous) -->
+        <joint name="passive_wheel_joint_${suffix}" type="continuous">
+            <parent link="leg_${suffix}_link"/>
+            <child link="passive_wheel_${suffix}_link"/>
+            <origin xyz="0 0 ${leg_length}" rpy="0 0 0"/>
+            <axis xyz="0 1 0"/>
+        </joint>
+
+    </xacro:macro>
+
+    <!-- 实例化4个伸缩腿 -->
+    
+    <!-- Top Leg (朝上 +Z) -->
+    <xacro:expansion_leg suffix="top" xyz_offset="0 0 ${body_height/2}" rpy_offset="0 0 0" axis_dir="0 0 1"/>
+
+    <!-- Bottom Leg (朝下 -Z) -> 旋转180度使Z轴朝下 -->
+    <xacro:expansion_leg suffix="bottom" xyz_offset="0 0 -${body_height/2}" rpy_offset="${pi} 0 0" axis_dir="0 0 1"/>
+
+    <!-- Left Leg (朝左 +Y) -> 绕X轴转-90度使Z轴朝左 -->
+    <xacro:expansion_leg suffix="left" xyz_offset="0 ${body_width/2} 0" rpy_offset="-${pi/2} 0 0" axis_dir="0 0 1"/>
+
+    <!-- Right Leg (朝右 -Y) -> 绕X轴转+90度使Z轴朝右 -->
+    <xacro:expansion_leg suffix="right" xyz_offset="0 -${body_width/2} 0" rpy_offset="${pi/2} 0 0" axis_dir="0 0 1"/>
+
+    <!-- ========================================================== -->
+    <!--                     6. Gazebo Plugins                      -->
+    <!-- ========================================================== -->
+    <gazebo>
+        <!-- Drive Wheels Controller -->
+        <plugin filename="libignition-gazebo-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
+            <joint_name>drive_wheel_top_joint</joint_name>
+            <joint_name>drive_wheel_bottom_joint</joint_name>
+            <joint_name>drive_wheel_left_joint</joint_name>
+            <joint_name>drive_wheel_right_joint</joint_name>
+            <p_gain>1.0</p_gain>
+            <i_gain>0.1</i_gain>
+            <d_gain>0.01</d_gain>
+        </plugin>
+
+        <!-- Expansion Joints Controller -->
+        <plugin filename="libignition-gazebo-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
+            <joint_name>drive_expansion_joint_top</joint_name>
+            <joint_name>drive_expansion_joint_bottom</joint_name>
+            <joint_name>drive_expansion_joint_left</joint_name>
+            <joint_name>drive_expansion_joint_right</joint_name>
+            <joint_name>expansion_joint_top</joint_name>
+            <joint_name>expansion_joint_bottom</joint_name>
+            <joint_name>expansion_joint_left</joint_name>
+            <joint_name>expansion_joint_right</joint_name>
+            <p_gain>50000.0</p_gain>
+            <i_gain>1000.0</i_gain>
+            <d_gain>500.0</d_gain>
+        </plugin>
+
+        <!-- Arm Joints Controller -->
+        <plugin filename="libignition-gazebo-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
+            <joint_name>joint_pitch</joint_name>
+            <joint_name>joint_yaw</joint_name>
+            <p_gain>500.0</p_gain>
+            <i_gain>50.0</i_gain>
+            <d_gain>10.0</d_gain>
+        </plugin>
+    </gazebo>
 
 </robot>
