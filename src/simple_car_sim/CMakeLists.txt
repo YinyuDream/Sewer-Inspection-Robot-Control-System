@@ -38,6 +38,7 @@ install(DIRECTORY
 
 install(PROGRAMS
   scripts/keyboard_control.py
+  scripts/autonomous_control.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

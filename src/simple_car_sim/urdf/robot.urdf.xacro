@@ -103,36 +103,84 @@
             <origin xyz="${xyz_offset}" rpy="${rpy_offset}"/>
             <axis xyz="0 0 1"/> <!-- 沿局部Z轴伸缩 -->
             <limit lower="0.0" upper="0.8" effort="5000.0" velocity="0.5"/>
+            <dynamics damping="5.0" friction="0.5"/>
         </joint>
 
-        <!-- 驱动轮 -->
-        <link name="drive_wheel_${location}_link">
+        <!-- Bogie Link (连接两个轮子的支架) -->
+        <link name="drive_bogie_${location}_link">
+            <visual>
+                <geometry><box size="0.6 0.05 0.05"/></geometry>
+                <material name="grey"/>
+            </visual>
+            <xacro:box_inertial mass="0.5" x="0.6" y="0.05" z="0.05"/>
+        </link>
+
+        <joint name="drive_bogie_joint_${location}" type="fixed">
+            <parent link="drive_leg_${location}_link"/>
+            <child link="drive_bogie_${location}_link"/>
+            <origin xyz="0 0 0.1" rpy="0 0 0"/>
+        </joint>
+
+        <!-- Front Wheel -->
+        <link name="drive_wheel_${location}_front_link">
             <visual>
                 <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
                 <origin rpy="${pi/2} 0 0"/>
                 <material name="black"/>
             </visual>
             <collision>
-                <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+                <geometry><sphere radius="${wheel_radius}"/></geometry>
                 <origin rpy="${pi/2} 0 0"/>
             </collision>
             <xacro:cylinder_inertial mass="${mass_wheel}" r="${wheel_radius}" h="${wheel_width}"/>
         </link>
 
-        <gazebo reference="drive_wheel_${location}_link">
-            <mu1>100.0</mu1>
-            <mu2>100.0</mu2>
-            <kp>1000000.0</kp>
-            <kd>1.0</kd>
+        <gazebo reference="drive_wheel_${location}_front_link">
+            <mu1>4.0</mu1>
+            <mu2>4.0</mu2>
+            <kp>10000.0</kp>
+            <kd>5.0</kd>
             <minDepth>0.001</minDepth>
         </gazebo>
 
-        <!-- 驱动关节 -->
-        <joint name="drive_wheel_${location}_joint" type="continuous">
-            <parent link="drive_leg_${location}_link"/>
-            <child link="drive_wheel_${location}_link"/>
-            <origin xyz="0 0 0.1" rpy="0 0 0"/> <!-- 安装在腿的末端 -->
+        <joint name="drive_wheel_${location}_front_joint" type="continuous">
+            <parent link="drive_bogie_${location}_link"/>
+            <child link="drive_wheel_${location}_front_link"/>
+            <origin xyz="0.25 0 0" rpy="0 0 0"/>
             <axis xyz="0 1 0"/>
+            <limit effort="1000.0" velocity="20.0"/>
+            <dynamics damping="0.5" friction="0.2"/>
+        </joint>
+
+        <!-- Rear Wheel -->
+        <link name="drive_wheel_${location}_rear_link">
+            <visual>
+                <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+                <origin rpy="${pi/2} 0 0"/>
+                <material name="black"/>
+            </visual>
+            <collision>
+                <geometry><sphere radius="${wheel_radius}"/></geometry>
+                <origin rpy="${pi/2} 0 0"/>
+            </collision>
+            <xacro:cylinder_inertial mass="${mass_wheel}" r="${wheel_radius}" h="${wheel_width}"/>
+        </link>
+
+        <gazebo reference="drive_wheel_${location}_rear_link">
+            <mu1>4.0</mu1>
+            <mu2>4.0</mu2>
+            <kp>10000.0</kp>
+            <kd>5.0</kd>
+            <minDepth>0.001</minDepth>
+        </gazebo>
+
+        <joint name="drive_wheel_${location}_rear_joint" type="continuous">
+            <parent link="drive_bogie_${location}_link"/>
+            <child link="drive_wheel_${location}_rear_link"/>
+            <origin xyz="-0.25 0 0" rpy="0 0 0"/>
+            <axis xyz="0 1 0"/>
+            <limit effort="1000.0" velocity="20.0"/>
+            <dynamics damping="0.5" friction="0.2"/>
         </joint>
     </xacro:macro>
 
@@ -171,18 +219,21 @@
         <child link="universal_joint_link"/>
         <origin xyz="-${body_len/2 + 0.08} 0 0" rpy="0 0 0"/>
         <axis xyz="0 1 0"/>
-        <limit lower="-0.8" upper="0.8" effort="100.0" velocity="0.5"/>
+        <limit lower="-1.57" upper="1.57" effort="100.0" velocity="0.5"/>
+        <dynamics damping="3.0" friction="0.2"/>
     </joint>
 
     <!-- 功能节的主体基座 -->
     <link name="func_base_link">
         <visual>
+            <origin xyz="-${body_len/2} 0 0" rpy="0 0 0"/> <!-- Offset geometry to start after joint -->
             <geometry>
                 <box size="${body_len} ${body_width} ${body_height}"/>
             </geometry>
             <material name="blue"/>
         </visual>
         <collision>
+            <origin xyz="-${body_len/2} 0 0" rpy="0 0 0"/>
             <geometry>
                 <box size="${body_len} ${body_width} ${body_height}"/>
             </geometry>
@@ -196,7 +247,8 @@
         <child link="func_base_link"/>
         <origin xyz="-0.12 0 0" rpy="0 0 0"/>
         <axis xyz="0 0 1"/>
-        <limit lower="-0.8" upper="0.8" effort="100.0" velocity="0.5"/>
+        <limit lower="-1.57" upper="1.57" effort="100.0" velocity="0.5"/>
+        <dynamics damping="3.0" friction="0.2"/>
     </joint>
 
 
@@ -235,36 +287,73 @@
             <!-- 沿着局部坐标系的Z轴伸缩 -->
             <axis xyz="0 0 1"/> 
             <limit lower="0.0" upper="0.8" effort="5000.0" velocity="0.5"/>
+            <dynamics damping="5.0" friction="0.5"/>
         </joint>
 
-        <!-- 被动轮 (Passive Wheel) -->
-        <link name="passive_wheel_${suffix}_link">
+        <!-- Bogie Link (连接两个轮子的支架) -->
+        <link name="passive_bogie_${suffix}_link">
             <visual>
-                <geometry>
-                    <sphere radius="0.04"/> <!-- 简化为球轮 -->
-                </geometry>
+                <geometry><box size="0.4 0.05 0.05"/></geometry>
+                <material name="grey"/>
+            </visual>
+            <xacro:box_inertial mass="0.5" x="0.4" y="0.05" z="0.05"/>
+        </link>
+
+        <joint name="passive_bogie_joint_${suffix}" type="fixed">
+            <parent link="leg_${suffix}_link"/>
+            <child link="passive_bogie_${suffix}_link"/>
+            <origin xyz="0 0 ${leg_length}" rpy="0 0 0"/>
+        </joint>
+
+        <!-- Front Passive Wheel -->
+        <link name="passive_wheel_${suffix}_front_link">
+            <visual>
+                <geometry><sphere radius="0.04"/></geometry>
                 <material name="black"/>
             </visual>
              <collision>
-                <geometry>
-                    <sphere radius="0.04"/>
-                </geometry>
+                <geometry><sphere radius="0.04"/></geometry>
             </collision>
             <xacro:box_inertial mass="0.1" x="0.08" y="0.08" z="0.08"/>
         </link>
 
-        <gazebo reference="passive_wheel_${suffix}_link">
-            <mu1>0.1</mu1> <!-- 被动轮摩擦力小一点，方便滑动? 不，它是支撑轮，应该也要有摩擦力防止打滑，但如果是万向轮... 这里简化为球轮 -->
-            <mu2>0.1</mu2>
+        <gazebo reference="passive_wheel_${suffix}_front_link">
+            <mu1>0.001</mu1>
+            <mu2>0.001</mu2>
             <kp>1000000.0</kp>
             <kd>1.0</kd>
         </gazebo>
 
-        <!-- 轮子关节 (Continuous) -->
-        <joint name="passive_wheel_joint_${suffix}" type="continuous">
-            <parent link="leg_${suffix}_link"/>
-            <child link="passive_wheel_${suffix}_link"/>
-            <origin xyz="0 0 ${leg_length}" rpy="0 0 0"/>
+        <joint name="passive_wheel_joint_${suffix}_front" type="continuous">
+            <parent link="passive_bogie_${suffix}_link"/>
+            <child link="passive_wheel_${suffix}_front_link"/>
+            <origin xyz="0.15 0 0" rpy="0 0 0"/>
+            <axis xyz="0 1 0"/>
+        </joint>
+
+        <!-- Rear Passive Wheel -->
+        <link name="passive_wheel_${suffix}_rear_link">
+            <visual>
+                <geometry><sphere radius="0.04"/></geometry>
+                <material name="black"/>
+            </visual>
+             <collision>
+                <geometry><sphere radius="0.04"/></geometry>
+            </collision>
+            <xacro:box_inertial mass="0.1" x="0.08" y="0.08" z="0.08"/>
+        </link>
+
+        <gazebo reference="passive_wheel_${suffix}_rear_link">
+            <mu1>0.001</mu1>
+            <mu2>0.001</mu2>
+            <kp>1000000.0</kp>
+            <kd>1.0</kd>
+        </gazebo>
+
+        <joint name="passive_wheel_joint_${suffix}_rear" type="continuous">
+            <parent link="passive_bogie_${suffix}_link"/>
+            <child link="passive_wheel_${suffix}_rear_link"/>
+            <origin xyz="-0.15 0 0" rpy="0 0 0"/>
             <axis xyz="0 1 0"/>
         </joint>
 
@@ -290,13 +379,17 @@
     <gazebo>
         <!-- Drive Wheels Controller -->
         <plugin filename="libignition-gazebo-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
-            <joint_name>drive_wheel_top_joint</joint_name>
-            <joint_name>drive_wheel_bottom_joint</joint_name>
-            <joint_name>drive_wheel_left_joint</joint_name>
-            <joint_name>drive_wheel_right_joint</joint_name>
-            <p_gain>1.0</p_gain>
-            <i_gain>0.1</i_gain>
-            <d_gain>0.01</d_gain>
+            <joint_name>drive_wheel_top_front_joint</joint_name>
+            <joint_name>drive_wheel_top_rear_joint</joint_name>
+            <joint_name>drive_wheel_bottom_front_joint</joint_name>
+            <joint_name>drive_wheel_bottom_rear_joint</joint_name>
+            <joint_name>drive_wheel_left_front_joint</joint_name>
+            <joint_name>drive_wheel_left_rear_joint</joint_name>
+            <joint_name>drive_wheel_right_front_joint</joint_name>
+            <joint_name>drive_wheel_right_rear_joint</joint_name>
+            <p_gain>80.0</p_gain>
+            <i_gain>0.0</i_gain>
+            <d_gain>5.0</d_gain>
         </plugin>
 
         <!-- Expansion Joints Controller -->
@@ -309,19 +402,11 @@
             <joint_name>expansion_joint_bottom</joint_name>
             <joint_name>expansion_joint_left</joint_name>
             <joint_name>expansion_joint_right</joint_name>
-            <p_gain>50000.0</p_gain>
-            <i_gain>1000.0</i_gain>
-            <d_gain>500.0</d_gain>
-        </plugin>
-
-        <!-- Arm Joints Controller -->
-        <plugin filename="libignition-gazebo-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
-            <joint_name>joint_pitch</joint_name>
-            <joint_name>joint_yaw</joint_name>
-            <p_gain>500.0</p_gain>
-            <i_gain>50.0</i_gain>
+            <p_gain>150.0</p_gain>
+            <i_gain>0.0</i_gain>
             <d_gain>10.0</d_gain>
         </plugin>
+
     </gazebo>
 
 </robot>
