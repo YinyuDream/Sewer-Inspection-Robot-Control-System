@@ -21,7 +21,7 @@ def generate_launch_description():
     
     # 获取包的共享目录路径
     pkg_share = get_package_share_directory('simple_car_sim')
-    
+
     # World file
     # 指定 Gazebo 世界文件路径
     world_file = os.path.join(pkg_share, 'worlds', 'pipe_world.sdf')
@@ -151,10 +151,20 @@ def generate_launch_description():
         output='screen'
     )
 
+    # Autonomous Control Node
+    # 启动自主控制节点
+    autonomous_control = Node(
+        package='simple_car_sim',
+        executable='autonomous_control.py',
+        name='autonomous_controller',
+        output='screen'
+    )
+
     return LaunchDescription([
         gazebo,
         spawn_entity,
         robot_state_publisher,
         bridge,
-        rviz
+        rviz,
+        autonomous_control
     ])
