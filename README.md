@@ -1,75 +1,71 @@
-# Simple Car Simulation (ROS 2 Humble + Ignition Gazebo)
+# 管道机器人仿真项目 (Pipeline Robot Simulation)
 
-这是一个基于 ROS 2 Humble 和 Ignition Gazebo (Fortress) 的四轮小车仿真项目。项目演示了如何构建 URDF 模型、配置 Gazebo 仿真环境、使用 ROS-Gazebo 桥接器以及在 RViz2 中进行可视化。
+本项目基于 ROS 2 和 Gazebo (Ignition) 构建，旨在模拟一个能够自适应管径变化的变几何管道机器人。项目包含了环境生成、机器人建模、自主控制及人机交互等完整功能模块。
 
-## 1. 环境要求
+## 1. 项目总体架构
 
-*   **操作系统**: Ubuntu 22.04 (Jammy Jellyfish)
-*   **ROS 版本**: ROS 2 Humble Hawksbill
-*   **Gazebo 版本**: Ignition Gazebo Fortress (Ignition 6)
+系统采用经典的 ROS 2 + Gazebo 仿真架构：
 
-## 2. 依赖安装
+*   **仿真环境 (Gazebo)**: 负责物理引擎解算（重力、碰撞、摩擦力）、环境渲染和传感器模拟。
+*   **控制层 (ROS 2)**: 运行控制算法（状态机、键盘控制），处理传感器数据并发布运动指令。
+*   **通信桥接 (ros_gz_bridge)**: 连接 ROS 2 和 Gazebo，将 ROS 的控制指令 (`std_msgs`, `geometry_msgs`) 转换为 Gazebo 的内部通信格式，反之亦然。
 
-在编译之前，请确保安装了必要的依赖包：
+## 2. 核心原理解析
 
-```bash
-sudo apt update
-sudo apt install ros-humble-ros-gz-sim \
-                 ros-humble-ros-gz-bridge \
-                 ros-humble-xacro \
-                 ros-humble-robot-state-publisher \
-                 ros-humble-rviz2 \
-                 ros-humble-teleop-twist-keyboard
-```
+### 2.1 环境生成原理 (`create_pipe_world.py`)
+为了测试机器人的通过性，我们需要一个非直线的、具有挑战性的3D管道环境。环境生成基于以下数学原理：
+*   **样条插值 (Spline Interpolation)**: 使用 `scipy.interpolate` 生成平滑的 3D 路径中心线。随机生成若干个控制点（关键点），通过插值通过这些点，形成连续弯曲的管道走向。
+*   **Frenet 标架 (Frenet Frame)**: 在路径的每一点上计算局部坐标系（切线 $T$、法线 $N$、副法线 $B$）。
+    *   切线指示路径前方。
+    *   法线和副法线定义了管道的横截面平面。
+*   **网格生成 (Mesh Generation)**: 在每个路径点的法平面上画一个圆，将所有圆连接成三角网格，导出为 `.obj` 模型文件供 Gazebo 加载。同时生成对应的 `.sdf` 世界文件。
 
-## 3. 编译项目
+### 2.2 机器人设计原理 (`robot.urdf.xacro`)
+机器人采用**变几何多履带/多轮结构**，设计用于在垂直或弯曲管道中通过“撑墙”方式行走。
+*   **结构布局**: 机器人中心为长方体主体，四周（上、下、左、右）各布置有一组驱动单元。
+*   **自适应伸缩**:
+    *   **伸缩关节 (Prismatic Joints)**: 每个驱动单元通过棱柱关节连接到主体。这允许机器人改变整体直径，以适应不同粗细的管道，或增加对管壁的正压力以产生足够的摩擦力。
+    *   **控制方式**: 使用 Gazebo 的 `JointController` 进行位置或力控制，使轮子紧贴管壁。
+*   **驱动方式**:
+    *   **8轮驱动**: 4个方向各有一对轮子（前后），共8个驱动轮。
+    *   **差速转向**: 虽然是在管道内，但依然保留了差速逻辑。例如向左转时，左侧轮减速/反转，右侧轮加速。在管道中，这意味着机器人会沿着管壁螺旋前进或调整姿态。
 
-进入你的工作空间根目录（例如 `~/Desktop/final_design`）：
+### 2.3 控制策略 (`autonomous_control.py`)
+自主控制节点实现了一个简单的有限状态机 (FSM)：
+1.  **初始化 (INIT)**: 系统启动，等待仿真就绪。
+2.  **展开/撑墙 (EXPANDING)**:
+    *   控制器向 8 个伸缩关节发布位置指令，使腿部向外伸展。
+    *   目标是让轮子接触管壁并产生预紧力。这是在垂直管道中不滑落的关键。
+3.  **运行/巡检 (RUNNING)**:
+    *   一旦达到预定扩张尺寸，机器人开始驱动所有 8 个轮子向前滚动。
+    *   在此阶段，机器人依靠静摩擦力附着在管壁上行进。
 
-```bash
-cd ~/Desktop/final_design
-colcon build --symlink-install
-source install/setup.bash
-```
+## 3. 文件结构说明
 
-## 4. 运行仿真
+*   `create_pipe_world.py`: Python 脚本，用于程序化生成 `.obj` 模型和 `.sdf` 世界文件。
+*   `run.sh`: 一键启动脚本。负责清理旧构建、重新编译 (`colcon build`) 并启动仿真。
+*   `src/simple_car_sim/`: ROS 2 功能包源码。
+    *   `urdf/`: 机器人的物理描述文件 (`.xacro`)。
+    *   `launch/`: 启动文件，负责加载模型、启动 Gazebo 和 Bridge。
+    *   `scripts/`: 控制逻辑脚本 (`autonomous_control.py`, `keyboard_control.py`)。
+    *   `worlds/`: 存放生成的环境文件。
 
-### 步骤 1: 启动仿真环境和可视化
+## 4. 如何运行
 
-运行 Launch 文件，这将启动：
-1.  Ignition Gazebo 仿真环境（加载小车和世界）。
-2.  `robot_state_publisher` 发布机器人的 TF 变换。
-3.  `ros_gz_bridge` 用于 ROS 2 和 Gazebo 之间的通信。
-4.  RViz2 用于可视化。
+1.  **生成环境** (首次运行或需要新地图时):
+    ```bash
+    python3 create_pipe_world.py
+    ```
 
-```bash
-source install/setup.bash
-ros2 launch simple_car_sim simulation.launch.py
-```
+2.  **编译并启动仿真**:
+    ```bash
+    ./run.sh
+    ```
+    这将启动 Gazebo，加载管道和机器人，并自动运行自主控制节点。
 
-### 步骤 2: 控制小车
-
-打开一个新的终端窗口，运行键盘控制节点：
-
-```bash
-source install/setup.bash
-ros2 run simple_car_sim keyboard_control.py
-```
-
-按照屏幕提示使用键盘（`i`, `j`, `l`, `,` 等）控制小车移动。
-
-## 5. 项目结构说明
-
-*   **urdf/**: 存放机器人的描述文件。
-    *   `robot.urdf.xacro`: 定义了小车的物理模型（底盘、轮子）以及 Gazebo 的 `DiffDrive` 差速驱动插件。
-*   **worlds/**: 存放 Gazebo 仿真世界文件。
-    *   `car_world.sdf`: 定义了光照、地面和小车运行的物理环境。
-*   **launch/**: 存放启动脚本。
-    *   `simulation.launch.py`: 负责编排所有节点的启动顺序和参数配置。
-*   **rviz/**: 存放 RViz 配置文件。
-    *   `config.rviz`: 预设了 RobotModel 和 TF 的显示配置。
-
-## 6. 关键技术点
-
-*   **ROS-Gazebo Bridge**: 在 `launch/simulation.launch.py` 中配置，负责将 ROS 2 的 `/cmd_vel` (速度指令) 转发给 Gazebo，并将 Gazebo 的 `/odom` (里程计) 和 `/tf` (坐标变换) 转发回 ROS 2。
-*   **DiffDrive Plugin**: 在 `urdf/robot.urdf.xacro` 中配置，使 Gazebo 能够根据速度指令模拟小车的差速运动。
+3.  **使用键盘控制** (在仿真启动后打开新终端):
+    ```bash
+    source install/setup.bash
+    ros2 run simple_car_sim keyboard_control.py
+    ```
+    此时你可以接管控制权，使用 `u/o` 控制伸缩，`w/a/s/d` 控制移动。

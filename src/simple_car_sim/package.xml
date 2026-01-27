@@ -3,23 +3,27 @@
 <package format="3">
   <name>simple_car_sim</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>管道机器人仿真包</description>
   <maintainer email="2959270610@qq.com">yinyudream</maintainer>
-  <license>TODO: License declaration</license>
+  <license>MIT</license>
 
+  <!-- 构建工具依赖 -->
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>rclpy</depend>
-  <depend>geometry_msgs</depend>
-  <depend>ros_gz_sim</depend>
-  <depend>ros_gz_bridge</depend>
-  <depend>robot_state_publisher</depend>
-  <depend>rviz2</depend>
-  <depend>xacro</depend>
+  <!-- 运行时和构建依赖 -->
+  <depend>rclpy</depend> <!-- ROS 2 Python 库 -->
+  <depend>geometry_msgs</depend> <!-- 几何消息类型 -->
+  <depend>ros_gz_sim</depend> <!-- Gazebo 仿真接口 -->
+  <depend>ros_gz_bridge</depend> <!-- ROS-Gazebo 通信桥接 -->
+  <depend>robot_state_publisher</depend> <!-- 机器人状态发布 -->
+  <depend>rviz2</depend> <!-- 可视化工具 -->
+  <depend>xacro</depend> <!-- 模型宏处理工具 -->
 
+  <!-- 测试依赖 -->
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
+  <!-- 导出信息 -->
   <export>
     <build_type>ament_cmake</build_type>
   </export>

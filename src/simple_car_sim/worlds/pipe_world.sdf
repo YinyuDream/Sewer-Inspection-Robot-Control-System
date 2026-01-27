@@ -1,46 +1,59 @@
 <?xml version="1.0" ?>
 <sdf version="1.8">
+  <!-- 世界名称: pipe_world -->
   <world name="pipe_world">
+    
+    <!-- 1. 物理引擎配置 -->
+    <!-- 设置仿真步长和实时因子 -->
     <physics name="1ms" type="ignored">
-      <max_step_size>0.001</max_step_size>
-      <real_time_factor>1.0</real_time_factor>
+      <max_step_size>0.001</max_step_size> <!-- 1ms 的仿真步长，越小越精确但计算量越大 -->
+      <real_time_factor>1.0</real_time_factor> <!-- 1.0 表示尽量与真实时间同步 -->
     </physics>
+
+    <!-- 2. 必要插件 -->
+    <!-- 物理系统插件: 处理刚体动力学、碰撞检测等 -->
     <plugin
       filename="ignition-gazebo-physics-system"
       name="ignition::gazebo::systems::Physics">
     </plugin>
+    <!-- 用户指令插件: 允许通过GUI或服务发送指令 -->
     <plugin
       filename="ignition-gazebo-user-commands-system"
       name="ignition::gazebo::systems::UserCommands">
     </plugin>
+    <!-- 场景广播插件: 将仿真场景数据广播给GUI客户端 -->
     <plugin
       filename="ignition-gazebo-scene-broadcaster-system"
       name="ignition::gazebo::systems::SceneBroadcaster">
     </plugin>
 
+    <!-- 3. 光照设置 -->
+    <!-- 定向光: 模拟太阳光 -->
     <light type="directional" name="sun">
-      <cast_shadows>true</cast_shadows>
-      <pose>0 0 10 0 0 0</pose>
-      <diffuse>0.8 0.8 0.8 1</diffuse>
-      <specular>0.2 0.2 0.2 1</specular>
+      <cast_shadows>true</cast_shadows> <!-- 启用阴影 -->
+      <pose>0 0 10 0 0 0</pose> <!-- 光源位置 -->
+      <diffuse>0.8 0.8 0.8 1</diffuse> <!-- 漫反射颜色 -->
+      <specular>0.2 0.2 0.2 1</specular> <!-- 镜面反射颜色 -->
       <attenuation>
         <range>1000</range>
         <constant>0.9</constant>
         <linear>0.01</linear>
         <quadratic>0.001</quadratic>
       </attenuation>
-      <direction>-0.5 0.1 -0.9</direction>
+      <direction>-0.5 0.1 -0.9</direction> <!-- 光照方向 -->
     </light>
 
+    <!-- 4. 地面平面 (可选) -->
+    <!-- 虽然我们在管道里，但放一个地面在下方以防万一 -->
     <model name="ground_plane">
-      <static>true</static>
-      <pose>0 0 -5 0 0 0</pose>
+      <static>true</static> <!-- 静态模型，不受重力影响，不可移动 -->
+      <pose>0 0 -5 0 0 0</pose> <!-- 放在地下5米 -->
       <link name="link">
         <collision name="collision">
           <geometry>
             <plane>
-              <normal>0 0 1</normal>
-              <size>100 100</size>
+              <normal>0 0 1</normal> <!-- 法线朝上 -->
+              <size>100 100</size> <!-- 100x100米 -->
             </plane>
           </geometry>
         </collision>
@@ -60,13 +73,17 @@
       </link>
     </model>
 
+    <!-- 5. 管道模型 (Pipe Track) -->
+    <!-- 这是我们的主要环境，由 create_pipe_world.py 生成 -->
     <model name="pipe_track">
-      <static>true</static>
+      <static>true</static> <!-- 管道是固定的 -->
       <pose>0 0 0 0 0 0</pose>
       <link name="link">
+        <!-- 碰撞几何体 -->
         <collision name="collision">
           <geometry>
             <mesh>
+              <!-- 引用生成的OBJ文件，确保路径正确 -->
               <uri>file:///home/yinyudream/robot/src/simple_car_sim/worlds/pipe.obj</uri>
               <scale>1 1 1</scale>
             </mesh>
@@ -74,12 +91,13 @@
           <surface>
             <friction>
               <ode>
-                <mu>4.0</mu>
+                <mu>4.0</mu> <!-- 增大摩擦系数，方便机器人攀爬 -->
                 <mu2>4.0</mu2>
               </ode>
             </friction>
           </surface>
         </collision>
+        <!-- 可视化几何体 -->
         <visual name="visual">
           <geometry>
             <mesh>
