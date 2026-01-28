@@ -151,20 +151,10 @@ def generate_launch_description():
         output='screen'
     )
 
-    # Autonomous Control Node
-    # 启动自主控制节点
-    autonomous_control = Node(
-        package='simple_car_sim',
-        executable='autonomous_control.py',
-        name='autonomous_controller',
-        output='screen'
-    )
-
     return LaunchDescription([
         gazebo,
         spawn_entity,
         robot_state_publisher,
         bridge,
-        rviz,
-        autonomous_control
+        rviz
     ])

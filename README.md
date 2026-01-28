@@ -61,11 +61,10 @@
     ```bash
     ./run.sh
     ```
-    这将启动 Gazebo，加载管道和机器人，并自动运行自主控制节点。
+    这将启动 Gazebo，加载管道和机器人。
 
-3.  **使用键盘控制** (在仿真启动后打开新终端):
+3.  **自动控制** (在仿真启动后打开新终端):
     ```bash
     source install/setup.bash
-    ros2 run simple_car_sim keyboard_control.py
+    ros2 run simple_car_sim autonomous_control.py
     ```
-    此时你可以接管控制权，使用 `u/o` 控制伸缩，`w/a/s/d` 控制移动。

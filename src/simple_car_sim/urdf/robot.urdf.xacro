@@ -196,16 +196,16 @@
     <!-- 实例化4个可伸缩驱动轮组件 -->
     
     <!-- Top Wheel (顶部轮组) -->
-    <xacro:expandable_drive_wheel location="top" xyz_offset="0 0 ${wheel_offset}" rpy_offset="0 0 0"/>
+    <xacro:expandable_drive_wheel location="top" xyz_offset="0 ${wheel_offset} ${wheel_offset}" rpy_offset="-${pi/4} 0 0"/>
 
     <!-- Bottom Wheel (底部轮组, 翻转180度) -->
-    <xacro:expandable_drive_wheel location="bottom" xyz_offset="0 0 -${wheel_offset}" rpy_offset="${pi} 0 0"/>
+    <xacro:expandable_drive_wheel location="bottom" xyz_offset="0 ${wheel_offset} -${wheel_offset}" rpy_offset="-${3*pi/4} 0 0"/>
 
     <!-- Left Wheel (左侧轮组, 翻转-90度) -->
-    <xacro:expandable_drive_wheel location="left" xyz_offset="0 ${wheel_offset} 0" rpy_offset="-${pi/2} 0 0"/>
+    <xacro:expandable_drive_wheel location="left" xyz_offset="0 -${wheel_offset} ${wheel_offset}" rpy_offset="${pi/4} 0 0"/>
 
     <!-- Right Wheel (右侧轮组, 翻转90度) -->
-    <xacro:expandable_drive_wheel location="right" xyz_offset="0 -${wheel_offset} 0" rpy_offset="${pi/2} 0 0"/>
+    <xacro:expandable_drive_wheel location="right" xyz_offset="0 -${wheel_offset} -${wheel_offset}" rpy_offset="${3*pi/4} 0 0"/>
 
 
 
@@ -301,6 +301,18 @@
             <dynamics damping="5.0" friction="0.5"/>
         </joint>
 
+        <!-- Expansion Joint Plugin (Functional Section) -->
+         <gazebo>
+            <plugin filename="libignition-gazebo-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
+                <joint_name>expansion_joint_${suffix}</joint_name>
+                <p_gain>5000.0</p_gain>
+                <i_gain>100.0</i_gain>
+                <d_gain>50.0</d_gain> 
+                <i_max>1000</i_max>
+                <i_min>-1000</i_min>
+            </plugin>
+         </gazebo>
+
         <!-- Bogie Link (连接两个轮子的支架) -->
         <link name="passive_bogie_${suffix}_link">
             <visual>
@@ -374,23 +386,23 @@
     <!-- 实例化4个伸缩腿 -->
     
     <!-- Top Leg (朝上 +Z) -->
-    <xacro:expansion_leg suffix="top" xyz_offset="0 0 ${body_height/2}" rpy_offset="0 0 0" axis_dir="0 0 1"/>
+    <xacro:expansion_leg suffix="top" xyz_offset="-0.25 0 ${body_height/2}" rpy_offset="0 0 0" axis_dir="0 0 1"/>
 
     <!-- Bottom Leg (朝下 -Z) -> 旋转180度使Z轴朝下 -->
-    <xacro:expansion_leg suffix="bottom" xyz_offset="0 0 -${body_height/2}" rpy_offset="${pi} 0 0" axis_dir="0 0 1"/>
+    <xacro:expansion_leg suffix="bottom" xyz_offset="-0.25 0 -${body_height/2}" rpy_offset="${pi} 0 0" axis_dir="0 0 1"/>
 
     <!-- Left Leg (朝左 +Y) -> 绕X轴转-90度使Z轴朝左 -->
-    <xacro:expansion_leg suffix="left" xyz_offset="0 ${body_width/2} 0" rpy_offset="-${pi/2} 0 0" axis_dir="0 0 1"/>
+    <xacro:expansion_leg suffix="left" xyz_offset="-0.25 ${body_width/2} 0" rpy_offset="-${pi/2} 0 0" axis_dir="0 0 1"/>
 
     <!-- Right Leg (朝右 -Y) -> 绕X轴转+90度使Z轴朝右 -->
-    <xacro:expansion_leg suffix="right" xyz_offset="0 -${body_width/2} 0" rpy_offset="${pi/2} 0 0" axis_dir="0 0 1"/>
+    <xacro:expansion_leg suffix="right" xyz_offset="-0.25 -${body_width/2} 0" rpy_offset="${pi/2} 0 0" axis_dir="0 0 1"/>
 
     <!-- ========================================================== -->
     <!--                     6. Gazebo Plugins                      -->
     <!-- ========================================================== -->
     <gazebo>
         <!-- Drive Wheels Controller (驱动轮控制器) -->
-        <plugin filename="ignition-gazebo-joint-controller-system" name="ignition::gazebo::systems::JointController">
+        <plugin filename="libignition-gazebo-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
             <joint_name>drive_wheel_top_front_joint</joint_name>
             <joint_name>drive_wheel_top_rear_joint</joint_name>
             <joint_name>drive_wheel_bottom_front_joint</joint_name>
@@ -399,12 +411,11 @@
             <joint_name>drive_wheel_left_rear_joint</joint_name>
             <joint_name>drive_wheel_right_front_joint</joint_name>
             <joint_name>drive_wheel_right_rear_joint</joint_name>
-            <!-- 增加初始速度，确保控制器激活 -->
             <initial_velocity>0.0</initial_velocity>
         </plugin>
 
         <!-- Expansion Joints Controller (伸缩关节控制器) -->
-        <plugin filename="ignition-gazebo-joint-controller-system" name="ignition::gazebo::systems::JointController">
+        <plugin filename="libignition-gazebo-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
             <joint_name>drive_expansion_joint_top</joint_name>
             <joint_name>drive_expansion_joint_bottom</joint_name>
             <joint_name>drive_expansion_joint_left</joint_name>
@@ -413,22 +424,21 @@
             <joint_name>expansion_joint_bottom</joint_name>
             <joint_name>expansion_joint_left</joint_name>
             <joint_name>expansion_joint_right</joint_name>
-            <!-- 位置控制需要设置 P 增益 -->
-            <p_gain>5000.0</p_gain>
-            <i_gain>100.0</i_gain>
-            <d_gain>50.0</d_gain>
+             <!-- 增加PID增益以确保能撑起机身 (原值 150 太小) -->
+            <p_gain>200.0</p_gain>
+            <i_gain>4.0</i_gain>
+            <d_gain>2.0</d_gain>
             <i_max>1000</i_max>
             <i_min>-1000</i_min>
         </plugin>
 
         <!-- Odometry Publisher (里程计发布) -->
-        <plugin filename="ignition-gazebo-odometry-publisher-system" name="ignition::gazebo::systems::OdometryPublisher">
+        <plugin filename="libignition-gazebo-odometry-publisher-system.so" name="ignition::gazebo::systems::OdometryPublisher">
             <odom_publish_frequency>50</odom_publish_frequency>
-            <odom_topic>odometry</odom_topic>
+            <odom_topic>/model/simple_car_v2/odometry</odom_topic>
             <odom_frame>odom</odom_frame>
             <robot_base_frame>base_link</robot_base_frame>
-            <!-- 这里其实需要提供轮子的关节，但对于8轮机器人，Odom插件可能算不准 -->
-            <!-- 暂时不填具体轮子，看是否能基于模型整体位姿发布 Ground Truth Odom -->
+            <dimensions>3</dimensions>
         </plugin>
         
         <!-- IMU Plugin -->

@@ -5,10 +5,12 @@ pkill -f "rviz"             # 终止 RViz 可视化工具
 pkill -f "parameter_bridge" # 终止 ROS-Gazebo 桥接器
 
 # 删除构建生成的文件，进行彻底的重新编译
-rm -rf build install log
+# (由于每次都全量重新编译会很慢，开发调试时建议注释掉下面这行)
+# rm -rf build install log
 
 # 使用 colcon 编译工作空间
-colcon build
+# --symlink-install: 使用软链接安装脚本和配置文件，修改 Python/Launch/URDF 后无需重新编译即可生效
+colcon build --symlink-install
 
 # 刷新环境变量以包含新编译的包
 source install/setup.bash
