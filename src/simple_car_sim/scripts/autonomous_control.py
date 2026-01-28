@@ -33,6 +33,7 @@ class AutonomousController(Node):
         # Publishers for Expansion (Drive Section)
         # 初始化驱动节(Drive Section)的伸缩关节控制器
         # 对应 URDF 中的移动关节 (prismatic joint)，用于改变驱动腿的长度
+        # 恢复为速度控制接口 (Velocity Command)，实际逻辑在 Python 层实现位置闭环
         self.pub_drive_exp_top = self.create_publisher(Float64, '/simple_car/drive_exp_top_vel', 10)
         self.pub_drive_exp_bottom = self.create_publisher(Float64, '/simple_car/drive_exp_bottom_vel', 10)
         self.pub_drive_exp_left = self.create_publisher(Float64, '/simple_car/drive_exp_left_vel', 10)
@@ -48,28 +49,24 @@ class AutonomousController(Node):
         # Subscribers
         # 订阅里程计信息，用于获取位置和速度
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
-        # 订阅关节状态信息，用于闭环位置控制
+        # 订阅关节状态信息 (可选，暂未使用)
         self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 10)
         
         # State
         self.current_speed = 0.0
         self.target_speed = -0.25 # 目标行进速度 (m/s)
-        self.joint_positions = {} # 存储关节当前位置
         
         # Pipe Radius is 0.8m.
         # Robot Radius (collapsed) = 0.27 (body) + 0.1 (bogie) + 0.18 (wheel) = 0.55m.
-        self.collapsed_radius = 0.55 # 收缩状态下的基础半径
-        
         # Gap to fill = 0.8 - 0.55 = 0.25m.
         # We add some compression for grip.
         # 管道参数與目标伸缩量计算：
         # 管道半径 = 0.8m
         # 机器人收缩状态半径 ≈ 0.55m (车身+转向架+轮子)
         # 需要填充的空隙 = 0.25m
-        # 目标伸缩量需要略小于空隙，或者通过力控制。
-        # 这里使用位置控制，设置一个适中的伸长量，依靠物理引擎的接触弹性产生压力（抓地力）
-        self.target_expansion_drive = 0.20 # 驱动节目标伸长量 (m)
-        self.target_expansion_func = 0.18 # 功能节目标伸长量 (m)
+        # 使用位置控制(Python层闭环)，设置一个大于空隙 (0.25m) 的值以产生持续压力
+        self.target_expansion_drive = 0.30 # 驱动节目标伸长量 (m)
+        self.target_expansion_func = 0.30 # 功能节目标伸长量 (m)
         self.expansion_ramp_time = 3.0 # 展开过程持续时间 (秒)
         
         self.pos_x = 0.0
@@ -78,6 +75,14 @@ class AutonomousController(Node):
         self.vel_linear = 0.0
         self.vel_angular = 0.0
         
+        # Joint positions for custom feedback control
+        self.joint_positions = {}
+        for name in ['drive_expansion_joint_top', 'drive_expansion_joint_bottom', 
+                     'drive_expansion_joint_left', 'drive_expansion_joint_right',
+                     'expansion_joint_top', 'expansion_joint_bottom',
+                     'expansion_joint_left', 'expansion_joint_right']:
+             self.joint_positions[name] = 0.0
+
         # Timer for control loop
         # 创建定时器，执行控制循环 (10Hz)
         self.create_timer(0.1, self.control_loop)
@@ -113,83 +118,56 @@ class AutonomousController(Node):
 
     def joint_state_callback(self, msg):
         """
-        处理关节状态回调
-        更新关节位置信息，用于 P 控制器
+        更新关节位置，用于闭环控制
         """
         for i, name in enumerate(msg.name):
-            self.joint_positions[name] = msg.position[i]
+            if name in self.joint_positions:
+                self.joint_positions[name] = msg.position[i]
 
-    def get_joint_position(self, keyword):
+    def compute_position_control(self, target, current, kp=2.0, max_vel=0.5):
         """
-        获取包含指定关键字的关节位置
-        简单处理：返回第一个匹配项的的位置
-        """
-        for name, pos in self.joint_positions.items():
-            if keyword in name:
-                return pos
-        return 0.0 # 默认值
-
-    def set_target_diameter(self, diameter):
-        """
-        设置机器人的目标直径
-        会自动计算所需的伸缩量
-        :param diameter: 目标直径 (米)
-        """
-        target_radius = diameter / 2.0
-        # 伸缩量 = 目标半径 - 收缩状态半径
-        expansion = target_radius - self.collapsed_radius
-        
-        # 限制在物理范围内 (0.0 ~ 0.8)
-        expansion = max(0.0, min(expansion, 0.8))
-        
-        self.target_expansion_drive = expansion
-        # 功能节稍微小一点，避免干涉或为了特定功能
-        self.target_expansion_func = max(0.0, expansion - 0.02)
-        
-        self.get_logger().info(f"Set diameter to {diameter:.2f}m (Expansion: {expansion:.2f}m)")
-
-    def calculate_pid_velocity(self, target_pos, keyword, kp=5.0, max_vel=0.5):
-        """
-        计算 P 控制器的速度指令
-        :param target_pos: 目标位置 (米)
-        :param keyword: 关节名称关键字
-        :param kp: 比例系数
+        简单的 P 控制器实现位置控制
+        :param target: 目标位置
+        :param current: 当前位置
+        :param kp: 比例增益
         :param max_vel: 最大速度限制
+        :return: 速度指令
         """
-        current_pos = self.get_joint_position(keyword)
-        error = target_pos - current_pos
+        error = target - current
         vel = error * kp
-        
-        # 限制最大速度
-        return max(min(vel, max_vel), -max_vel)
+        # 限制速度范围
+        if vel > max_vel:
+            vel = max_vel
+        elif vel < -max_vel:
+            vel = -max_vel
+        return vel
 
     def publish_expansion(self, drive_target, func_target):
         """
-        发布伸缩指令 (位置控制 -> 速度指令)
+        发布伸缩指令 (内部计算速度指令实现位置控制)
         :param drive_target: 驱动节目标位置 (m)
         :param func_target: 功能节目标位置 (m)
         """
-        # 使用 P 控制器计算速度
-        vel_drive_top = self.calculate_pid_velocity(drive_target, 'drive_expansion_joint_top')
-        vel_drive_bottom = self.calculate_pid_velocity(drive_target, 'drive_expansion_joint_bottom')
-        vel_drive_left = self.calculate_pid_velocity(drive_target, 'drive_expansion_joint_left')
-        vel_drive_right = self.calculate_pid_velocity(drive_target, 'drive_expansion_joint_right')
+        # Drive Section Control
+        self.pub_drive_exp_top.publish(Float64(data=self.compute_position_control(
+            drive_target, self.joint_positions.get('drive_expansion_joint_top', 0.0))))
+        self.pub_drive_exp_bottom.publish(Float64(data=self.compute_position_control(
+            drive_target, self.joint_positions.get('drive_expansion_joint_bottom', 0.0))))
+        self.pub_drive_exp_left.publish(Float64(data=self.compute_position_control(
+            drive_target, self.joint_positions.get('drive_expansion_joint_left', 0.0))))
+        self.pub_drive_exp_right.publish(Float64(data=self.compute_position_control(
+            drive_target, self.joint_positions.get('drive_expansion_joint_right', 0.0))))
         
-        vel_func_top = self.calculate_pid_velocity(func_target, 'expansion_joint_top')
-        vel_func_bottom = self.calculate_pid_velocity(func_target, 'expansion_joint_bottom')
-        vel_func_left = self.calculate_pid_velocity(func_target, 'expansion_joint_left')
-        vel_func_right = self.calculate_pid_velocity(func_target, 'expansion_joint_right')
-
-        # 发布计算出的速度
-        self.pub_drive_exp_top.publish(Float64(data=vel_drive_top))
-        self.pub_drive_exp_bottom.publish(Float64(data=vel_drive_bottom))
-        self.pub_drive_exp_left.publish(Float64(data=vel_drive_left))
-        self.pub_drive_exp_right.publish(Float64(data=vel_drive_right))
-        
-        self.pub_func_exp_top.publish(Float64(data=vel_func_top))
-        self.pub_func_exp_bottom.publish(Float64(data=vel_func_bottom))
-        self.pub_func_exp_left.publish(Float64(data=vel_func_left))
-        self.pub_func_exp_right.publish(Float64(data=vel_func_right))
+        # Functional Section Control
+        # return
+        self.pub_func_exp_top.publish(Float64(data=self.compute_position_control(
+            func_target, self.joint_positions.get('expansion_joint_top', 0.0))))
+        self.pub_func_exp_bottom.publish(Float64(data=self.compute_position_control(
+            func_target, self.joint_positions.get('expansion_joint_bottom', 0.0))))
+        self.pub_func_exp_left.publish(Float64(data=self.compute_position_control(
+            func_target, self.joint_positions.get('expansion_joint_left', 0.0))))
+        self.pub_func_exp_right.publish(Float64(data=self.compute_position_control(
+            func_target, self.joint_positions.get('expansion_joint_right', 0.0))))
 
     def publish_drive(self, speed):
         """
@@ -239,24 +217,11 @@ class AutonomousController(Node):
             # 运行阶段：保持压力，并向前驱动
             self.publish_expansion(self.target_expansion_drive, self.target_expansion_func) # Keep pressure
             self.publish_drive(self.target_speed)
-            
-            # 脱困逻辑 / 自动收缩演示
-            # 如果检测到速度过低（卡住），尝试减小直径脱困
-            if abs(self.vel_linear) < 0.01:
-                self.get_logger().warn("Stuck detected! Shrinking...")
-                
-                # 暂时缩小直径到 1.2m (约等于收缩状态)
-                current_drive_target = self.target_expansion_drive
-                self.set_target_diameter(1.2) 
-                
-                # 发布收缩后的指令并等待
-                self.publish_expansion(self.target_expansion_drive, self.target_expansion_func)
-                time.sleep(2.0)
-                
-                # 恢复原来的直径
-                self.get_logger().info("Restoring diameter...")
-                self.target_expansion_drive = current_drive_target
-                self.target_expansion_func = max(0.0, current_drive_target - 0.02)
+            if abs(self.vel_linear) < 0.005:
+                pass
+                # 卡住时完全收缩 (位置设为0)
+                # self.publish_expansion(0.0, 0.0)
+                    
 
     def print_status(self):
         """
