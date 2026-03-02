@@ -10,8 +10,8 @@ pkill -f "parameter_bridge" # 终止 ROS-Gazebo 桥接器
 
 # 使用 colcon 编译工作空间
 # --symlink-install: 使用软链接安装脚本和配置文件，修改 Python/Launch/URDF 后无需重新编译即可生效
-colcon build --symlink-install
-
+# colcon build --symlink-instal --packages-select simple_car_sim
+colcon build --packages-select simple_car_sim
 # 刷新环境变量以包含新编译的包
 source install/setup.bash
 

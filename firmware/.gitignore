@@ -1,0 +1,12 @@
+build
+mx.scratch
+!.settings
+# Additional STM32 ignores
+.mxproject
+.project
+.cproject
+*.ioc.bak
+Debug/
+Release/
+JLinkLog.txt
+

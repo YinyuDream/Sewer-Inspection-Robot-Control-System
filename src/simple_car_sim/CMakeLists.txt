@@ -15,6 +15,8 @@ find_package(ament_cmake REQUIRED)
 find_package(rclpy REQUIRED)
 # 查找几何消息库 (Twist 等)
 find_package(geometry_msgs REQUIRED)
+find_package(can_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 # 查找机器人状态发布器
 find_package(robot_state_publisher REQUIRED)
 # 查找 Xacro 模型解析工具
@@ -44,8 +46,14 @@ install(DIRECTORY
   urdf
   worlds
   rviz
-  scripts
+  # scripts  <-- Commented out or removed if we install specific programs
   DESTINATION share/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  scripts/autonomous_control.py
+  scripts/can_transceiver.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 # 安装可执行脚本

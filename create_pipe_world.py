@@ -12,8 +12,8 @@ def generate_pipe_obj(filename):
     """
     # 參數设置
     # 根据小车尺寸(~0.5m)进行调整
-    L_straight = 2.0  # 直线段长度
-    R_corner = 1.5    # 拐角半径
+    L_straight = 4.0  # 直线段长度
+    R_corner = 1.6    # 拐角半径
     R_pipe = 0.8      # 管道半径
     N_circle = 32     # 管道截面圆的分段数（圆的平滑度）
     N_corner_steps = 16 # 拐角处的路径分段数
@@ -76,30 +76,34 @@ def generate_pipe_obj(filename):
             path_tangents.append(direction)
 
     # 下面按顺序构建闭合路径
-    # 1. 右下角(BR)拐角: 中心 (1.0, -1.0)，角度 -90 到 0
-    # 1. Corner BR: Center (1.0, -1.0)
-    add_corner((1.0, -1.0), -90, 0)
-    # 2. Straight R: (2.5, -1.0) -> (2.5, 1.0)
-    # 2. 右侧(R)直线: 从 (2.5, -1.0) 到 (2.5, 1.0)
-    add_straight((2.5, -1.0), (2.5, 1.0))
-    # 3. Corner TR: Center (1.0, 1.0)
-    # 3. 右上角(TR)拐角: 中心 (1.0, 1.0)，角度 0 到 90
-    add_corner((1.0, 1.0), 0, 90)
-    # 4. Straight T: (1.0, 2.5) -> (-1.0, 2.5)
-    # 4. 顶部(T)直线: 从 (1.0, 2.5) 到 (-1.0, 2.5)
-    add_straight((1.0, 2.5), (-1.0, 2.5))
-    # 5. Corner TL: Center (-1.0, 1.0)
-    # 5. 左上角(TL)拐角: 中心 (-1.0, 1.0)，角度 90 到 180
-    add_corner((-1.0, 1.0), 90, 180)
-    # 6. Straight L: (-2.5, 1.0) -> (-2.5, -1.0)
-    # 6. 左侧(L)直线: 从 (-2.5, 1.0) 到 (-2.5, -1.0)
-    add_straight((-2.5, 1.0), (-2.5, -1.0))
-    # 7. Corner BL: Center (-1.0, -1.0)
-    # 7. 左下角(BL)拐角: 中心 (-1.0, -1.0)，角度 180 到 270
-    add_corner((-1.0, -1.0), 180, 270)
-    # 8. Straight B: (-1.0, -2.5) -> (1.0, -2.5)
-    # 8. 底部(B)直线: 从 (-1.0, -2.5) 到 (1.0, -2.5)
-    add_straight((-1.0, -2.5), (1.0, -2.5))
+    # 按照用户要求：圆心改为 (+-2, +-2)，R=1.6
+    # 1. Corner BR: Center (2.0, -2.0)
+    # Start: (2.0, -3.6), End: (3.6, -2.0)
+    add_corner((2.0, -2.0), -90, 0)
+    
+    # 2. Straight R: (3.6, -2.0) -> (3.6, 2.0)
+    add_straight((3.6, -2.0), (3.6, 2.0))
+    
+    # 3. Corner TR: Center (2.0, 2.0)
+    # Start: (3.6, 2.0), End: (2.0, 3.6)
+    add_corner((2.0, 2.0), 0, 90)
+    
+    # 4. Straight T: (2.0, 3.6) -> (-2.0, 3.6)
+    add_straight((2.0, 3.6), (-2.0, 3.6))
+    
+    # 5. Corner TL: Center (-2.0, 2.0)
+    # Start: (-2.0, 3.6), End: (-3.6, 2.0)
+    add_corner((-2.0, 2.0), 90, 180)
+    
+    # 6. Straight L: (-3.6, 2.0) -> (-3.6, -2.0)
+    add_straight((-3.6, 2.0), (-3.6, -2.0))
+    
+    # 7. Corner BL: Center (-2.0, -2.0)
+    # Start: (-3.6, -2.0), End: (-2.0, -3.6)
+    add_corner((-2.0, -2.0), 180, 270)
+    
+    # 8. Straight B: (-2.0, -3.6) -> (2.0, -3.6)
+    add_straight((-2.0, -3.6), (2.0, -3.6))
     
     # 闭合回路：将第一个点（和切线）再次添加到末尾，确保首尾相接
     path_points.append(path_points[0])
@@ -286,7 +290,7 @@ if __name__ == "__main__":
     # 原始路径: base_dir = "/home/yinyudream/Desktop/final_design/src/simple_car_sim/worlds"
     # 如果不存在則修正為当前脚本子目录
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    potential_dir = base_dir = "/home/yinyudream/Desktop/final_design/src/simple_car_sim/worlds"
+    potential_dir = base_dir = "/home/yinyudream/Desktop/robot/src/simple_car_sim/worlds"
     
     if not os.path.exists(os.path.dirname(base_dir)): # 检查上级目录
          base_dir = os.path.join(script_dir, "src/simple_car_sim/worlds")

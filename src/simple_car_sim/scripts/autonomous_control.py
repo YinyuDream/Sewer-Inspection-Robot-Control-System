@@ -3,258 +3,277 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import JointState
+from sensor_msgs.msg import JointState, Imu
 import time
 import math
 
-class AutonomousController(Node):
+def euler_from_quaternion(x, y, z, w):
+    t0 = +2.0 * (w * x + y * z)
+    t1 = +1.0 - 2.0 * (x * x + y * y)
+    roll = math.atan2(t0, t1)
+    
+    t2 = +2.0 * (w * y - z * x)
+    t2 = +1.0 if t2 > +1.0 else t2
+    t2 = -1.0 if t2 < -1.0 else t2
+    pitch = math.asin(t2)
+    
+    t3 = +2.0 * (w * z + x * y)
+    t4 = +1.0 - 2.0 * (y * y + z * z)
+    yaw = math.atan2(t3, t4)
+    return roll, pitch, yaw
+
+
+def normalize_angle(angle):
+    """将角度归一化到 [-pi, pi]"""
+    return math.atan2(math.sin(angle), math.cos(angle))
+
+def geometric_calculation(x, y, yaw, vel, corner_center, radius):
     """
-    自主控制器节点
-    功能：
-    1. 接收里程计(Odometry)信息，监控机器人的状态。
-    2. 控制机器人自动展开并适应管道。
-    3. 控制机器人沿管道行进。
+    计算横向误差 e 和航向误差 theta_e
+    假设小车逆时针 (CCW) 行驶
     """
+    e = 0.0
+    psi_path = 0.0
+    d_path = corner_center + radius  # 路径边界位置 (例如 2.0)
+    # --- 区域判定逻辑 ---
+    
+    # 1. 右上圆角区域
+    if x > corner_center and y > corner_center:
+        xc, yc = corner_center, corner_center
+        dist = math.sqrt((x - xc)**2 + (y - yc)**2)
+        e = dist - radius
+        # 路径切线方向: 相对于圆心的角度 + 90度 (逆时针)
+        angle_to_center = math.atan2(y - yc, x - xc)
+        psi_path = angle_to_center + math.pi / 2
+
+    # 2. 左上圆角区域
+    elif x < -corner_center and y > corner_center:
+        xc, yc = -corner_center, corner_center
+        dist = math.sqrt((x - xc)**2 + (y - yc)**2)
+        e = dist - radius
+        angle_to_center = math.atan2(y - yc, x - xc)
+        psi_path = angle_to_center + math.pi / 2
+
+    # 3. 左下圆角区域
+    elif x < -corner_center and y < -corner_center:
+        xc, yc = -corner_center, -corner_center
+        dist = math.sqrt((x - xc)**2 + (y - yc)**2)
+        e = dist - radius
+        angle_to_center = math.atan2(y - yc, x - xc)
+        psi_path = angle_to_center + math.pi / 2
+
+    # 4. 右下圆角区域
+    elif x > corner_center and y < -corner_center:
+        xc, yc = corner_center, -corner_center
+        dist = math.sqrt((x - xc)**2 + (y - yc)**2)
+        e = dist - radius
+        angle_to_center = math.atan2(y - yc, x - xc)
+        psi_path = angle_to_center + math.pi / 2
+
+    # 5. 上边直线 (y=2)
+    elif y > corner_center:
+        e = y - d_path
+        psi_path = math.pi  # 向左开
+
+    # 6. 下边直线 (y=-2)
+    elif y < -corner_center:
+        e = -d_path - y
+        psi_path = 0.0  # 向右开
+
+    # 7. 左边直线 (x=-2)
+    elif x < -corner_center:
+        e = -d_path - x
+        psi_path = -math.pi / 2  # 向下开
+
+    # 8. 右边直线 (x=2)
+    elif x > corner_center:
+        e = x - d_path
+        psi_path = math.pi / 2  # 向上开
+
+    # --- 计算航向误差 ---
+    theta_e = normalize_angle(psi_path - yaw)
+    return e, theta_e
+
+def calculate_wheel_speed(stanley_delta, vel_target, L = 0.6, W = 0.68):
+    # vel_target 应该是在中心线的线速度 m/s
+    omega = vel_target * math.tan(stanley_delta) / L
+    # print(omega)
+    v_left = vel_target - (omega * W / 2)
+    v_right = vel_target + (omega * W / 2)
+    
+    # 将左右轮的线速度转换为角速度
+    wheel_radius = 0.16
+    w_left = v_left / wheel_radius
+    w_right = v_right / wheel_radius
+    
+    return w_left, w_right
+
+
+
+def stanley_control(x, y, yaw, vel, vel_target, corner_center, radius):
+    k = 4.0  # Stanley 控制增益 (增大以加强横向误差修正)
+    k_soft = 0.3  # 软化速度，避免低速时控制过激
+    e, theta_e = geometric_calculation(x, y, yaw, vel, corner_center, radius)
+    
+    # Stanley 控制律
+    # 增加前馈控制项或增加 P 增益
+    delta = theta_e + math.atan2(k * e, vel + k_soft)
+    delta = max(min(delta, math.radians(45)), math.radians(-45))  # 放宽转向角度限制
+    
+    # Differential drive kinematics
+    # 使用较小的 L 值 (0.4) 来增加转向灵敏度，因为差速车可以原地转向
+    # W (0.68) 保持物理真实值
+    v_left, v_right = calculate_wheel_speed(delta, vel_target, L=0.6, W=0.68)
+    # print(e, math.degrees(theta_e), math.degrees(delta))
+    return v_left, v_right
+
+class CarController(Node):
     def __init__(self):
-        super().__init__('autonomous_controller')
+        super().__init__('car_controller')
         
-        # Publishers for Drive Wheels (Front and Rear for each leg)
-        # 初始化驱动轮速度发布者 (每个腿有前后两个驱动轮，共8个)
-        # 对应 URDF 中的连续关节 (continuous joint)
-        self.pub_top_front = self.create_publisher(Float64, '/simple_car/top_front_wheel_vel', 10)
-        self.pub_top_rear = self.create_publisher(Float64, '/simple_car/top_rear_wheel_vel', 10)
-        self.pub_bottom_front = self.create_publisher(Float64, '/simple_car/bottom_front_wheel_vel', 10)
-        self.pub_bottom_rear = self.create_publisher(Float64, '/simple_car/bottom_rear_wheel_vel', 10)
-        self.pub_left_front = self.create_publisher(Float64, '/simple_car/left_front_wheel_vel', 10)
-        self.pub_left_rear = self.create_publisher(Float64, '/simple_car/left_rear_wheel_vel', 10)
-        self.pub_right_front = self.create_publisher(Float64, '/simple_car/right_front_wheel_vel', 10)
-        self.pub_right_rear = self.create_publisher(Float64, '/simple_car/right_rear_wheel_vel', 10)
-        
-        # Publishers for Expansion (Drive Section)
-        # 初始化驱动节(Drive Section)的伸缩关节控制器
-        # 对应 URDF 中的移动关节 (prismatic joint)，用于改变驱动腿的长度
-        # 恢复为速度控制接口 (Velocity Command)，实际逻辑在 Python 层实现位置闭环
-        self.pub_drive_exp_top = self.create_publisher(Float64, '/simple_car/drive_exp_top_vel', 10)
-        self.pub_drive_exp_bottom = self.create_publisher(Float64, '/simple_car/drive_exp_bottom_vel', 10)
-        self.pub_drive_exp_left = self.create_publisher(Float64, '/simple_car/drive_exp_left_vel', 10)
-        self.pub_drive_exp_right = self.create_publisher(Float64, '/simple_car/drive_exp_right_vel', 10)
-        
-        # Publishers for Expansion (Functional Section)
-        # 初始化功能节(Functional Section)的伸缩关节控制器
-        self.pub_func_exp_top = self.create_publisher(Float64, '/simple_car/func_exp_top_vel', 10)
-        self.pub_func_exp_bottom = self.create_publisher(Float64, '/simple_car/func_exp_bottom_vel', 10)
-        self.pub_func_exp_left = self.create_publisher(Float64, '/simple_car/func_exp_left_vel', 10)
-        self.pub_func_exp_right = self.create_publisher(Float64, '/simple_car/func_exp_right_vel', 10)
+        # Publishers for Drive Wheels (Rear)
+        self.pub_rl = self.create_publisher(Float64, '/cmd_force_rl', 10)
+        self.pub_rr = self.create_publisher(Float64, '/cmd_force_rr', 10)
         
         # Subscribers
-        # 订阅里程计信息，用于获取位置和速度
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
-        # 订阅关节状态信息 (可选，暂未使用)
         self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 10)
+        self.create_subscription(Imu, '/imu', self.imu_callback, 10)
         
-        # State
-        self.current_speed = 0.0
-        self.target_speed = -0.25 # 目标行进速度 (m/s)
-        
-        # Pipe Radius is 0.8m.
-        # Robot Radius (collapsed) = 0.27 (body) + 0.1 (bogie) + 0.18 (wheel) = 0.55m.
-        # Gap to fill = 0.8 - 0.55 = 0.25m.
-        # We add some compression for grip.
-        # 管道参数與目标伸缩量计算：
-        # 管道半径 = 0.8m
-        # 机器人收缩状态半径 ≈ 0.55m (车身+转向架+轮子)
-        # 需要填充的空隙 = 0.25m
-        # 使用位置控制(Python层闭环)，设置一个大于空隙 (0.25m) 的值以产生持续压力
-        self.target_expansion_drive = 0.30 # 驱动节目标伸长量 (m)
-        self.target_expansion_func = 0.30 # 功能节目标伸长量 (m)
-        self.expansion_ramp_time = 3.0 # 展开过程持续时间 (秒)
-        
+        # States
         self.pos_x = 0.0
         self.pos_y = 0.0
         self.pos_z = 0.0
+        self.front_x = 0.0
+        self.front_y = 0.0
         self.vel_linear = 0.0
-        self.vel_angular = 0.0
+        self.roll_truth = 0.0
+        self.pitch_truth = 0.0
+        self.yaw_truth = 0.0
         
-        # Joint positions for custom feedback control
-        self.joint_positions = {}
-        for name in ['drive_expansion_joint_top', 'drive_expansion_joint_bottom', 
-                     'drive_expansion_joint_left', 'drive_expansion_joint_right',
-                     'expansion_joint_top', 'expansion_joint_bottom',
-                     'expansion_joint_left', 'expansion_joint_right']:
-             self.joint_positions[name] = 0.0
+        self.imu_yaw = 0.0
+        self.imu_accel_x = 0.0
+        self.imu_angular_vel_z = 0.0
+        
+        self.wheel_rl_speed = 0.0
+        self.wheel_rr_speed = 0.0
+        self.suspension_fl_joint = 0.0
+        self.suspension_fr_joint = 0.0
+        self.suspension_rl_joint = 0.0
+        self.suspension_rr_joint = 0.0
+        
+        # Control targets
+        self.target_speed_linear = 0.2 # m/s
+        self.wheel_radius = 0.16
+        self.car_length = 0.3
+        
+        # PID state
+        self.error_sum = {'rl': 0.0, 'rr': 0.0}
+        self.last_error = {'rl': 0.0, 'rr': 0.0}
 
-        # Timer for control loop
-        # 创建定时器，执行控制循环 (10Hz)
-        self.create_timer(0.1, self.control_loop)
-        # 创建定时器，打印状态信息 (1Hz)
-        self.create_timer(1.0, self.print_status)
-        
         self.start_time = time.time()
-        self.state = "INIT" # 状态机: INIT(初始化), EXPANDING(展开中), RUNNING(运行中)
-        self.expand_start_time = None
-
+        
+        self.create_timer(0.05, self.control_loop) # 20Hz
+        self.create_timer(0.5, self.print_status)  # 2Hz
+        
     def odom_callback(self, msg):
-        """
-        处理里程计回调
-        更新机器人的位置和速度变量
-        """
         self.pos_x = msg.pose.pose.position.x
         self.pos_y = msg.pose.pose.position.y
         self.pos_z = msg.pose.pose.position.z
-        
-        # Calculate linear velocity magnitude
-        # 计算线速度的大小
+        self.front_x = self.pos_x + self.car_length * math.cos(self.yaw_truth)
+        self.front_y = self.pos_y + self.car_length * math.sin(self.yaw_truth)
         vx = msg.twist.twist.linear.x
         vy = msg.twist.twist.linear.y
-        vz = msg.twist.twist.linear.z
-        self.vel_linear = math.sqrt(vx*vx + vy*vy + vz*vz)
+        self.vel_linear = math.sqrt(vx*vx + vy*vy)
         
-        # Calculate angular velocity magnitude
-        # 计算角速度的大小
-        wx = msg.twist.twist.angular.x
-        wy = msg.twist.twist.angular.y
-        wz = msg.twist.twist.angular.z
-        self.vel_angular = math.sqrt(wx*wx + wy*wy + wz*wz)
-
+        # Calculate yaw from quaternion
+        q = msg.pose.pose.orientation
+        quat = [q.w, q.x, q.y, q.z]
+        roll, pitch, yaw = euler_from_quaternion(q.x, q.y, q.z, q.w)
+        self.roll_truth = roll
+        self.pitch_truth = pitch
+        self.yaw_truth = yaw
+        
+    def imu_callback(self, msg):
+        q = msg.orientation
+        quat = [q.w, q.x, q.y, q.z]
+        _, _, yaw = euler_from_quaternion(q.x, q.y, q.z, q.w)
+        self.imu_yaw = yaw
+        self.imu_accel_x = msg.linear_acceleration.x
+        self.imu_angular_vel_z = msg.angular_velocity.z
+        
     def joint_state_callback(self, msg):
-        """
-        更新关节位置，用于闭环控制
-        """
         for i, name in enumerate(msg.name):
-            if name in self.joint_positions:
-                self.joint_positions[name] = msg.position[i]
-
-    def compute_position_control(self, target, current, kp=2.0, max_vel=0.5):
-        """
-        简单的 P 控制器实现位置控制
-        :param target: 目标位置
-        :param current: 当前位置
-        :param kp: 比例增益
-        :param max_vel: 最大速度限制
-        :return: 速度指令
-        """
-        error = target - current
-        vel = error * kp
-        # 限制速度范围
-        if vel > max_vel:
-            vel = max_vel
-        elif vel < -max_vel:
-            vel = -max_vel
-        return vel
-
-    def publish_expansion(self, drive_target, func_target):
-        """
-        发布伸缩指令 (内部计算速度指令实现位置控制)
-        :param drive_target: 驱动节目标位置 (m)
-        :param func_target: 功能节目标位置 (m)
-        """
-        # Drive Section Control
-        self.pub_drive_exp_top.publish(Float64(data=self.compute_position_control(
-            drive_target, self.joint_positions.get('drive_expansion_joint_top', 0.0))))
-        self.pub_drive_exp_bottom.publish(Float64(data=self.compute_position_control(
-            drive_target, self.joint_positions.get('drive_expansion_joint_bottom', 0.0))))
-        self.pub_drive_exp_left.publish(Float64(data=self.compute_position_control(
-            drive_target, self.joint_positions.get('drive_expansion_joint_left', 0.0))))
-        self.pub_drive_exp_right.publish(Float64(data=self.compute_position_control(
-            drive_target, self.joint_positions.get('drive_expansion_joint_right', 0.0))))
+            if name == 'wheel_rl_joint' and len(msg.velocity) > i:
+                self.wheel_rl_speed = msg.velocity[i]
+            elif name == 'wheel_rr_joint' and len(msg.velocity) > i:
+                self.wheel_rr_speed = msg.velocity[i]
+            elif name == 'suspension_fl_joint' and len(msg.position) > i:
+                self.suspension_fl_joint = msg.position[i]
+            elif name == 'suspension_fr_joint' and len(msg.position) > i:
+                self.suspension_fr_joint = msg.position[i]
+            elif name == 'suspension_rl_joint' and len(msg.position) > i:
+                self.suspension_rl_joint = msg.position[i]
+            elif name == 'suspension_rr_joint' and len(msg.position) > i:
+                self.suspension_rr_joint = msg.position[i]
+                
+    def calculate_torque(self, target_angular_speed, current_angular_speed, wheel):
+        # 调整 PID 参数以获得更平稳的控制
+        Kp = 4.0
+        Ki = 0.5
+        Kd = 0.0
         
-        # Functional Section Control
-        # return
-        self.pub_func_exp_top.publish(Float64(data=self.compute_position_control(
-            func_target, self.joint_positions.get('expansion_joint_top', 0.0))))
-        self.pub_func_exp_bottom.publish(Float64(data=self.compute_position_control(
-            func_target, self.joint_positions.get('expansion_joint_bottom', 0.0))))
-        self.pub_func_exp_left.publish(Float64(data=self.compute_position_control(
-            func_target, self.joint_positions.get('expansion_joint_left', 0.0))))
-        self.pub_func_exp_right.publish(Float64(data=self.compute_position_control(
-            func_target, self.joint_positions.get('expansion_joint_right', 0.0))))
-
-    def publish_drive(self, speed):
-        """
-        发布驱动轮速度指令
-        :param speed: 目标线速度
-        """
-        msg = Float64()
-        msg.data = speed
-        self.pub_top_front.publish(msg)
-        self.pub_top_rear.publish(msg)
-        self.pub_bottom_front.publish(msg)
-        self.pub_bottom_rear.publish(msg)
-        self.pub_left_front.publish(msg)
-        self.pub_left_rear.publish(msg)
-        self.pub_right_front.publish(msg)
-        self.pub_right_rear.publish(msg)
+        error = target_angular_speed - current_angular_speed
+        
+        self.error_sum[wheel] += error * 0.05
+        # 积分限幅
+        self.error_sum[wheel] = max(min(self.error_sum[wheel], 20.0), -20.0)
+        
+        u_p = Kp * error
+        u_i = Ki * self.error_sum[wheel]
+        u_d = Kd * (error - self.last_error[wheel]) / 0.05
+        
+        self.last_error[wheel] = error
+        
+        torque = u_p + u_i + u_d
+        # 力矩限幅，避免过大导致打滑或不稳定
+        # URDF limit is 500, but reasonable control torque is lower
+        torque = max(min(torque, 50.0), -50.0)
+        return torque
 
     def control_loop(self):
-        """
-        主控制循环
-        实现简单的状态机逻辑
-        """
-        elapsed = time.time() - self.start_time
         
-        if self.state == "INIT":
-            # 初始化阶段：等待系统稳定 (2秒)
-            if elapsed > 2.0:
-                self.state = "EXPANDING"
-                self.get_logger().info("State: EXPANDING")
-                self.expand_start_time = time.time()
-                
-        elif self.state == "EXPANDING":
-            # 展开阶段：逐渐增加伸缩指令，平滑接触管壁
-            ramp_elapsed = time.time() - self.expand_start_time if self.expand_start_time else 0.0
-            ramp_ratio = min(ramp_elapsed / self.expansion_ramp_time, 1.0)
-            
-            drive_cmd = ramp_ratio * self.target_expansion_drive
-            func_cmd = ramp_ratio * self.target_expansion_func
-            
-            self.publish_expansion(drive_cmd, func_cmd)
-            
-            if ramp_ratio >= 1.0:
-                self.state = "RUNNING"
-                self.get_logger().info("State: RUNNING")
-                
-        elif self.state == "RUNNING":
-            # 运行阶段：保持压力，并向前驱动
-            self.publish_expansion(self.target_expansion_drive, self.target_expansion_func) # Keep pressure
-            self.publish_drive(self.target_speed)
-            if abs(self.vel_linear) < 0.005:
-                pass
-                # 卡住时完全收缩 (位置设为0)
-                # self.publish_expansion(0.0, 0.0)
-                    
-
+        target_w_l, target_w_r = stanley_control(self.front_x, self.front_y, self.yaw_truth, self.vel_linear, self.target_speed_linear, corner_center=2.0, radius=1.6)
+        target_w = self.target_speed_linear / self.wheel_radius  # 直接使用线速度转换为角速度作为目标
+        # torque_rl = self.calculate_torque(target_w, self.wheel_rl_speed, 'rl')
+        # torque_rr = self.calculate_torque(target_w, self.wheel_rr_speed, 'rr')
+        torque_rl = self.calculate_torque(target_w_l, self.wheel_rl_speed, 'rl')
+        torque_rr = self.calculate_torque(target_w_r, self.wheel_rr_speed, 'rr')
+        # print(torque_rl, torque_rr)
+        self.pub_rl.publish(Float64(data=torque_rl))
+        self.pub_rr.publish(Float64(data=torque_rr))
+        
     def print_status(self):
-        """
-        打印机器人状态到终端
-        """
-        print(f"\033[2J\033[H") # 这是一个 ANSI 转义序列，用于清屏和光标复位
-        print("="*40)
-        print(f"Pipeline Robot Autonomous Monitor (管道机器人自主监控)")
-        print("="*40)
-        print(f"State (状态):           {self.state}")
-        print(f"Time (运行时间):            {time.time() - self.start_time:.1f} s")
-        print("-" * 20)
-        print(f"Position (位置 X,Y,Z): ({self.pos_x:.2f}, {self.pos_y:.2f}, {self.pos_z:.2f})")
-        print(f"Linear Velocity (线速度):  {self.vel_linear:.2f} m/s")
-        print(f"Angular Velocity (角速度): {self.vel_angular:.2f} rad/s")
-        print("-" * 20)
-        print(f"Target Exp Drive (目标驱动伸缩): {self.target_expansion_drive:.2f} m")
-        print(f"Target Exp Func (目标功能伸缩):  {self.target_expansion_func:.2f} m")
-        print(f"Target Speed (目标速度):       {self.target_speed:.2f} m/s")
-        print("="*40)
+        
+        target_w_l, target_w_r = stanley_control(self.front_x, self.front_y, self.yaw_truth, self.vel_linear, self.target_speed_linear, corner_center=2.0, radius=1.6)
+        print(target_w_l, target_w_r)
+        print(f"--- Time: {time.time() - self.start_time:.1f} s ---")
+        print(f"[Ground Truth] Pos: ({self.pos_x:.2f}, {self.pos_y:.2f})  Vel: {self.vel_linear:.2f} m/s  Yaw: {math.degrees(self.yaw_truth):.1f} deg")
+        print(f"[Orientation ] Roll: {math.degrees(self.roll_truth):.1f} deg  Pitch: {math.degrees(self.pitch_truth):.1f} deg  Yaw: {math.degrees(self.yaw_truth):.1f} deg")
+        print(f"[IMU Sensor  ] Accel X: {self.imu_accel_x:.2f} m/s^2  Yaw: {math.degrees(self.imu_yaw):.1f} deg  Yaw Rate: {math.degrees(self.imu_angular_vel_z):.1f} deg/s")
+        print(f"[Encoder     ] RL Speed: {self.wheel_rl_speed:.1f} rad/s  RR Speed: {self.wheel_rr_speed:.1f} rad/s")
+        print(f"[Suspension  ] FL: {self.suspension_fl_joint:.3f} deg  FR: {self.suspension_fr_joint:.3f} deg  RL: {self.suspension_rl_joint:.3f} deg  RR: {self.suspension_rr_joint:.3f} deg")
 
 def main(args=None):
     rclpy.init(args=args)
-    node = AutonomousController()
+    node = CarController()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        # Stop everything
-        # 程序退出时，停止所有运动
-        node.publish_drive(0.0)
-        node.publish_expansion(0.0, 0.0)
+        node.pub_rl.publish(Float64(data=0.0))
+        node.pub_rr.publish(Float64(data=0.0))
         node.destroy_node()
         rclpy.shutdown()
 
