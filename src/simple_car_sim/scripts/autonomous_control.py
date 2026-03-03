@@ -114,7 +114,7 @@ def stanley_control(x, y, yaw, vel, vel_target, corner_center, radius, roll):
     k = 10.0  # Stanley 控制增益 (增大以加强横向误差修正)
     k_soft = 0.3  # 软化速度，避免低速时控制过激
     e, theta_e = geometric_calculation(x, y, yaw, vel, corner_center, radius)
-    e = -math.tan(roll)
+    e += -math.tan(roll)
     # Stanley 控制律
     # 增加前馈控制项或增加 P 增益
     delta = theta_e + math.atan2(k * e, vel + k_soft)
