@@ -190,15 +190,17 @@ void MotionControlTask(void *argument)
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN MotionControlTask */
+  Robot_general data;
   float status[15]; // 15个位姿真值输入
   uint16_t PWM_Value[4]; // 有4个电机的PWM控制输入
   /* Infinite loop */
   for(;;)
   {
-    if (osMessageQueueGet(motionControlHandle, &status, NULL, osWaitForever) == osOK)
+    if (osMessageQueueGet(motionControlHandle, &data, NULL, osWaitForever) == osOK)
     {
         // 这里可以处理运动控制相关的 CAN 数据，例如 位置、速度、加速度等
         // 将数据输入到运动控制算法中进行计算
+        status[data.id - 0x100] = data.FloatBytes.f; // 假设前两个字节是一个状态值，单位转换
         motion_control_algorithm(status, PWM_Value); // 运动控制算法处理，输出 PWM 控制值
         for (uint16_t i = 0; i < 4; i++) {
           CAN_Send_Data(0x180 + i, (uint8_t *)&PWM_Value[i], 2); // 将控制结果通过 CAN 发送出去，ID 从 0x180 开始
@@ -220,7 +222,7 @@ void CanCommunicationTask(void *argument)
   /* USER CODE BEGIN CanCommunicationTask */
   CAN_RxPacketTypeDef rxPacket;
   // uint8_t msg_buffer[64]; // 用于打印调试信息的缓冲区
-
+  Robot_general data;
   /* Infinite loop */
   for(;;)
   {
@@ -234,10 +236,9 @@ void CanCommunicationTask(void *argument)
         // 注意：在多任务中并发调用 CDC_Transmit_FS 可能需要互斥锁，这里仅作演示
         /* int len = sprintf((char *)msg_buffer, "CAN Rx: ID=0x%lX, D0=%02X, D1=%02X\r\n", 
                           (unsigned long)rxPacket.header.StdId, rxPacket.data[0], rxPacket.data[1]);
-        
         CDC_Transmit_FS(msg_buffer, len);*/
         
-        Robot_general data;
+        
         data.id = rxPacket.header.StdId;
         for(int i = 0; i < 4 && i < rxPacket.header.DLC; i++) {
             data.FloatBytes.bytes[i] = rxPacket.data[i];

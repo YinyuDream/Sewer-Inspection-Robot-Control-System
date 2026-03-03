@@ -17,8 +17,33 @@ void power_management_logic(float *power_status, float *instruction) {
      * 
      * 这里为了不让 GCC 报 "未使用变量" 的警告，做个伪操作
      */
-    if (power_status != NULL) {
-        // float main_voltage = power_status[0] * 0.01f;
-        // ... (业务逻辑)
+    if (power_status != NULL && instruction != NULL) {
+        float filtered_val = 0.0f;
+        const float alpha = 0.15f; 
+
+        // 模拟多路电源通道的巡检与控制
+        for (int i = 0; i < 8; i++) {
+            // 模拟读取并滤波：简单的低通滤波
+            // 这里的输入索引 i%4 是为了演示防止越界，假设 power_status 至少有4个元素
+            filtered_val = filtered_val * (1.0f - alpha) + power_status[i % 4] * alpha;
+
+            // 模拟一些业务判断逻辑 (过压/欠压/过流保护)
+            if (filtered_val > 28.0f) {
+                // 过压切断
+                instruction[i] = 0.0f;
+            } else if (filtered_val < 18.0f) {
+                // 欠压报警或降额
+                instruction[i] = 0.5f; 
+            } else {
+                // 正常输出，这里加一点数学运算模拟负载
+                float temp = filtered_val * 1.05f - 0.2f;
+                instruction[i] = (temp > 24.0f) ? 1.0f : 0.9f;
+            }
+            
+            // 增加额外的无意义循环来消耗 CPU Cycles
+            for(volatile int k=0; k<50; k++) {
+                filtered_val += 0.00001f;
+            }
+        }
     }
 }

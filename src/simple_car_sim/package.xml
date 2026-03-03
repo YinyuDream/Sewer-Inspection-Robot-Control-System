@@ -13,8 +13,12 @@
   <!-- 运行时和构建依赖 -->
   <depend>rclpy</depend> <!-- ROS 2 Python 库 -->
   <depend>geometry_msgs</depend> <!-- 几何消息类型 -->
+  <depend>nav_msgs</depend> <!-- Add nav messages dependency -->
   <depend>can_msgs</depend> <!-- Add CAN messages dependency -->
+  <exec_depend>message_filters</exec_depend> <!-- Add messages filter dependency -->
   <depend>std_msgs</depend> <!-- Add standard messages dependency -->
+  <depend>sensor_msgs</depend> <!-- Add sensor messages dependency -->
+  <depend>cv_bridge</depend> <!-- Add cv_bridge dependency -->
   <depend>ros_gz_sim</depend> <!-- Gazebo 仿真接口 -->
   <depend>ros_gz_bridge</depend> <!-- ROS-Gazebo 通信桥接 -->
   <depend>robot_state_publisher</depend> <!-- 机器人状态发布 -->

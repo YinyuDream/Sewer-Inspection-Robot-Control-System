@@ -27,7 +27,7 @@ def generate_launch_description():
             '-topic', 'robot_description',
             '-name', 'simple_car',
             '-x', '0.0',
-            '-y', '-3.6',
+            '-y', '-5.6',
             '-z', '0.0',
             '-R', '0.0',
             '-P', '0.0',
@@ -54,6 +54,9 @@ def generate_launch_description():
             #'/model/simple_car/joint/wheel_rl_joint/cmd_vel@std_msgs/msg/Float64@ignition.msgs.Double',
             '/imu@sensor_msgs/msg/Imu@ignition.msgs.IMU',
             '/model/simple_car/odometry@nav_msgs/msg/Odometry@ignition.msgs.Odometry',
+            '/scan@sensor_msgs/msg/LaserScan@ignition.msgs.LaserScan',
+            '/camera/image_raw@sensor_msgs/msg/Image@ignition.msgs.Image',
+            '/camera/camera_info@sensor_msgs/msg/CameraInfo@ignition.msgs.CameraInfo',
         ],
         remappings=[
             ('/model/simple_car/joint/wheel_rl_joint/cmd_force', '/cmd_force_rl'),

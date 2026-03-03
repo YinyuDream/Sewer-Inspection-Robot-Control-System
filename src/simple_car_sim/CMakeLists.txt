@@ -53,6 +53,8 @@ install(DIRECTORY
 install(PROGRAMS
   scripts/autonomous_control.py
   scripts/can_transceiver.py
+  scripts/battery_sim.py
+  scripts/slam_interface.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

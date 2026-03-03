@@ -12,7 +12,7 @@ def generate_pipe_obj(filename):
     """
     # 參數设置
     # 根据小车尺寸(~0.5m)进行调整
-    L_straight = 4.0  # 直线段长度
+    L_straight = 8.0  # 直线段长度
     R_corner = 1.6    # 拐角半径
     R_pipe = 0.8      # 管道半径
     N_circle = 32     # 管道截面圆的分段数（圆的平滑度）
@@ -76,34 +76,30 @@ def generate_pipe_obj(filename):
             path_tangents.append(direction)
 
     # 下面按顺序构建闭合路径
-    # 按照用户要求：圆心改为 (+-2, +-2)，R=1.6
-    # 1. Corner BR: Center (2.0, -2.0)
-    # Start: (2.0, -3.6), End: (3.6, -2.0)
-    add_corner((2.0, -2.0), -90, 0)
+    # 按照用户要求：圆心改为 (+-L_straight/2, +-L_straight/2)
+    # 1. Corner BR: Center (L_straight/2, -L_straight/2)
+    add_corner((L_straight/2, -L_straight/2), -90, 0)
     
-    # 2. Straight R: (3.6, -2.0) -> (3.6, 2.0)
-    add_straight((3.6, -2.0), (3.6, 2.0))
+    # 2. Straight R:
+    add_straight((L_straight/2 + R_corner, -L_straight/2), (L_straight/2 + R_corner, L_straight/2))
     
-    # 3. Corner TR: Center (2.0, 2.0)
-    # Start: (3.6, 2.0), End: (2.0, 3.6)
-    add_corner((2.0, 2.0), 0, 90)
+    # 3. Corner TR: Center (L_straight/2, L_straight/2)
+    add_corner((L_straight/2, L_straight/2), 0, 90)
     
-    # 4. Straight T: (2.0, 3.6) -> (-2.0, 3.6)
-    add_straight((2.0, 3.6), (-2.0, 3.6))
+    # 4. Straight T:
+    add_straight((L_straight/2, L_straight/2 + R_corner), (-L_straight/2, L_straight/2 + R_corner))
     
-    # 5. Corner TL: Center (-2.0, 2.0)
-    # Start: (-2.0, 3.6), End: (-3.6, 2.0)
-    add_corner((-2.0, 2.0), 90, 180)
+    # 5. Corner TL: Center (-L_straight/2, L_straight/2)
+    add_corner((-L_straight/2, L_straight/2), 90, 180)
     
-    # 6. Straight L: (-3.6, 2.0) -> (-3.6, -2.0)
-    add_straight((-3.6, 2.0), (-3.6, -2.0))
+    # 6. Straight L:
+    add_straight((-L_straight/2 - R_corner, L_straight/2), (-L_straight/2 - R_corner, -L_straight/2))
     
-    # 7. Corner BL: Center (-2.0, -2.0)
-    # Start: (-3.6, -2.0), End: (-2.0, -3.6)
-    add_corner((-2.0, -2.0), 180, 270)
+    # 7. Corner BL: Center (-L_straight/2, -L_straight/2)
+    add_corner((-L_straight/2, -L_straight/2), 180, 270)
     
-    # 8. Straight B: (-2.0, -3.6) -> (2.0, -3.6)
-    add_straight((-2.0, -3.6), (2.0, -3.6))
+    # 8. Straight B:
+    add_straight((-L_straight/2, -L_straight/2 - R_corner), (L_straight/2, -L_straight/2 - R_corner))
     
     # 闭合回路：将第一个点（和切线）再次添加到末尾，确保首尾相接
     path_points.append(path_points[0])

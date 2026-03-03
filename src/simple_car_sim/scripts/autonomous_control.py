@@ -110,14 +110,16 @@ def calculate_wheel_speed(stanley_delta, vel_target, L = 0.6, W = 0.68):
 
 
 
-def stanley_control(x, y, yaw, vel, vel_target, corner_center, radius, roll):
+def stanley_control(x, y, yaw, vel, vel_target, corner_center, radius, roll, sum_roll):
     k = 10.0  # Stanley 控制增益 (增大以加强横向误差修正)
     k_soft = 0.3  # 软化速度，避免低速时控制过激
     e, theta_e = geometric_calculation(x, y, yaw, vel, corner_center, radius)
-    e += -math.tan(roll)
+    # e += - math.tan(roll - math.pi/4)
+    # print(e, theta_e)
     # Stanley 控制律
     # 增加前馈控制项或增加 P 增益
-    delta = theta_e + math.atan2(k * e, vel + k_soft)
+    delta = theta_e + math.atan2(k * e, vel + k_soft) - 8 * math.tan(roll) - 2 * math.tan(sum_roll)  # 积分项
+    # print(delta)
     delta = max(min(delta, math.radians(45)), math.radians(-45))  # 放宽转向角度限制
     
     # Differential drive kinematics
@@ -125,6 +127,7 @@ def stanley_control(x, y, yaw, vel, vel_target, corner_center, radius, roll):
     # W (0.68) 保持物理真实值
     v_left, v_right = calculate_wheel_speed(delta, vel_target, L=0.6, W=0.68)
     # print(e, math.degrees(theta_e), math.degrees(delta))
+    # print(f"Target Vel: {vel_target:.2f} m/s  Left Wheel: {v_left:.2f} m/s  Right Wheel: {v_right:.2f} m/s")
     return v_left, v_right
 
 
@@ -199,6 +202,12 @@ class CarController(Node):
         self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 10)
         self.create_subscription(Imu, '/imu', self.imu_callback, 10)
         
+        self.pub_odom = self.create_publisher(Odometry, '/odom_to_firmware', 10)
+        self.pub_jointstate = self.create_publisher(JointState, '/joint_states_to_firmware', 10)
+        self.pub_imu = self.create_publisher(Imu, '/imu_to_firmware', 10)
+        
+
+
         # States
         self.pos_x = 0.0
         self.pos_y = 0.0
@@ -241,6 +250,7 @@ class CarController(Node):
         # PID state
         self.error_sum = {'rl': 0.0, 'rr': 0.0}
         self.last_error = {'rl': 0.0, 'rr': 0.0}
+        self.error_roll_sum = 0.0
 
         self.start_time = time.time()
         
@@ -290,7 +300,7 @@ class CarController(Node):
                 
     def calculate_voltage_pid(self, target_w, current_w, wheel):
         # 模拟驱动器内部的速度闭环控制 (Input: Speed -> Output: Voltage)
-        Kp = 4.0   # 提高比例增益，增强跟随和差速执行能力
+        Kp = 8.0   # 提高比例增益，增强跟随和差速执行能力
         Ki = 1.0   # 积分增益，解决稳态静差
         Kd = 0.05  # 微分增益
         Kf = 0.5   # 前馈增益 (匹配修改后的反电动势常数 Ke = 0.5)
@@ -328,10 +338,11 @@ class CarController(Node):
     def control_loop(self):
         # 软启动：以 0.5 m/s^2 的加速度逐渐增加目标速度，避免起步"地板油"造成瞬间打滑
         self.target_speed_linear = min(self.desired_max_speed, self.target_speed_linear + 0.5 * self.sim_dt)
-        
-        target_w_l, target_w_r = stanley_control(self.front_x, self.front_y, self.yaw_truth, self.vel_linear, self.target_speed_linear, corner_center=2.0, radius=1.6, roll=self.roll_truth)
+        self.target_speed_linear += 0.5 * self.sim_dt  # 加速到目标速度，增加前馈项帮助克服初始静摩擦
+        self.error_roll_sum += self.roll_truth * self.sim_dt  # 累积 roll 误差用于积分控制
+        target_w_l, target_w_r = stanley_control(self.front_x, self.front_y, self.yaw_truth, self.vel_linear, self.target_speed_linear, corner_center=4.0, radius=1.6, roll=self.roll_truth, sum_roll=self.error_roll_sum)
         # target_w = self.target_speed_linear / self.wheel_radius  # 直接使用线速度转换为角速度作为目标
-
+        # print(target_w_l, target_w_r)
         # 1. 驱动器层：计算所需电压 (PID)
         # [紧急修正] 考虑到左后轮 (RL) 的物理安装可能反了：
         #   Case A: 编码器反了 -> 电机正转读数负 -> PID 正反馈 -> 震荡
@@ -360,7 +371,7 @@ class CarController(Node):
         
     def print_status(self):
         
-        target_w_l, target_w_r = stanley_control(self.front_x, self.front_y, self.yaw_truth, self.vel_linear, self.target_speed_linear, corner_center=2.0, radius=1.6, roll=self.roll_truth)
+        target_w_l, target_w_r = stanley_control(self.front_x, self.front_y, self.yaw_truth, self.vel_linear, self.target_speed_linear, corner_center=4.0, radius=1.6, roll=self.roll_truth, sum_roll=self.error_roll_sum)
         print(target_w_l, target_w_r)
         print(f"--- Time: {time.time() - self.start_time:.1f} s ---")
         print(f"[Ground Truth] Pos: ({self.pos_x:.2f}, {self.pos_y:.2f})  Vel: {self.vel_linear:.2f} m/s  Yaw: {math.degrees(self.yaw_truth):.1f} deg")
