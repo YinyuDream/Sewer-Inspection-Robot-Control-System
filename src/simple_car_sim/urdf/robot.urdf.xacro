@@ -173,9 +173,27 @@
     <!-- Gazebo Plugins -->
     <gazebo>
         <!-- Apply Joint Force for rear wheels -->
+        <!-- 原有的力控制插件 (已被注释)
         <plugin filename="libignition-gazebo-apply-joint-force-system.so" name="ignition::gazebo::systems::ApplyJointForce">
             <joint_name>wheel_rl_joint</joint_name>
             <joint_name>wheel_rr_joint</joint_name>
+        </plugin>
+        -->
+
+        <!-- 使用 Joint Controller 进行速度控制 (新增) -->
+        <plugin filename="libignition-gazebo-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
+            <joint_name>wheel_rl_joint</joint_name>
+            <initial_velocity>0.0</initial_velocity>
+            <p_gain>10.0</p_gain>
+            <i_gain>0.1</i_gain>
+            <d_gain>0.0</d_gain>
+        </plugin>
+        <plugin filename="libignition-gazebo-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
+            <joint_name>wheel_rr_joint</joint_name>
+            <initial_velocity>0.0</initial_velocity>
+            <p_gain>10.0</p_gain>
+            <i_gain>0.1</i_gain>
+            <d_gain>0.0</d_gain>
         </plugin>
 
         <!-- Odometry Publisher (Provides Ground Truth position, velocity, heading) -->

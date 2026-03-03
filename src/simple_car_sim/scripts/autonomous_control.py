@@ -110,11 +110,11 @@ def calculate_wheel_speed(stanley_delta, vel_target, L = 0.6, W = 0.68):
 
 
 
-def stanley_control(x, y, yaw, vel, vel_target, corner_center, radius):
+def stanley_control(x, y, yaw, vel, vel_target, corner_center, radius, roll):
     k = 4.0  # Stanley 控制增益 (增大以加强横向误差修正)
     k_soft = 0.3  # 软化速度，避免低速时控制过激
     e, theta_e = geometric_calculation(x, y, yaw, vel, corner_center, radius)
-    
+    e = -roll / 3
     # Stanley 控制律
     # 增加前馈控制项或增加 P 增益
     delta = theta_e + math.atan2(k * e, vel + k_soft)
@@ -132,8 +132,10 @@ class CarController(Node):
         super().__init__('car_controller')
         
         # Publishers for Drive Wheels (Rear)
-        self.pub_rl = self.create_publisher(Float64, '/cmd_force_rl', 10)
-        self.pub_rr = self.create_publisher(Float64, '/cmd_force_rr', 10)
+        self.pub_rl = self.create_publisher(Float64, '/cmd_vel_rl', 10)
+        self.pub_rr = self.create_publisher(Float64, '/cmd_vel_rr', 10)
+        # self.pub_rl = self.create_publisher(Float64, '/cmd_force_rl', 10)
+        # self.pub_rr = self.create_publisher(Float64, '/cmd_force_rr', 10)
         
         # Subscribers
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
@@ -243,19 +245,20 @@ class CarController(Node):
 
     def control_loop(self):
         
-        target_w_l, target_w_r = stanley_control(self.front_x, self.front_y, self.yaw_truth, self.vel_linear, self.target_speed_linear, corner_center=2.0, radius=1.6)
+        target_w_l, target_w_r = stanley_control(self.front_x, self.front_y, self.yaw_truth, self.vel_linear, self.target_speed_linear, corner_center=2.0, radius=1.6, roll=self.roll_truth)
         target_w = self.target_speed_linear / self.wheel_radius  # 直接使用线速度转换为角速度作为目标
         # torque_rl = self.calculate_torque(target_w, self.wheel_rl_speed, 'rl')
         # torque_rr = self.calculate_torque(target_w, self.wheel_rr_speed, 'rr')
         torque_rl = self.calculate_torque(target_w_l, self.wheel_rl_speed, 'rl')
         torque_rr = self.calculate_torque(target_w_r, self.wheel_rr_speed, 'rr')
         # print(torque_rl, torque_rr)
-        self.pub_rl.publish(Float64(data=torque_rl))
-        self.pub_rr.publish(Float64(data=torque_rr))
+        # print(torque_rl, torque_rr)
+        self.pub_rl.publish(Float64(data=target_w_l))
+        self.pub_rr.publish(Float64(data=target_w_r))
         
     def print_status(self):
         
-        target_w_l, target_w_r = stanley_control(self.front_x, self.front_y, self.yaw_truth, self.vel_linear, self.target_speed_linear, corner_center=2.0, radius=1.6)
+        target_w_l, target_w_r = stanley_control(self.front_x, self.front_y, self.yaw_truth, self.vel_linear, self.target_speed_linear, corner_center=2.0, radius=1.6, roll=self.roll_truth)
         print(target_w_l, target_w_r)
         print(f"--- Time: {time.time() - self.start_time:.1f} s ---")
         print(f"[Ground Truth] Pos: ({self.pos_x:.2f}, {self.pos_y:.2f})  Vel: {self.vel_linear:.2f} m/s  Yaw: {math.degrees(self.yaw_truth):.1f} deg")
