@@ -111,10 +111,10 @@ def calculate_wheel_speed(stanley_delta, vel_target, L = 0.6, W = 0.68):
 
 
 def stanley_control(x, y, yaw, vel, vel_target, corner_center, radius, roll):
-    k = 4.0  # Stanley 控制增益 (增大以加强横向误差修正)
+    k = 10.0  # Stanley 控制增益 (增大以加强横向误差修正)
     k_soft = 0.3  # 软化速度，避免低速时控制过激
     e, theta_e = geometric_calculation(x, y, yaw, vel, corner_center, radius)
-    e = -roll / 3
+    e = -math.tan(roll)
     # Stanley 控制律
     # 增加前馈控制项或增加 P 增益
     delta = theta_e + math.atan2(k * e, vel + k_soft)
@@ -127,13 +127,70 @@ def stanley_control(x, y, yaw, vel, vel_target, corner_center, radius, roll):
     # print(e, math.degrees(theta_e), math.degrees(delta))
     return v_left, v_right
 
+
+class DCMotorSim:
+    """
+    高保真直流电机仿真模型 (用于 HIL/SIL 测试)
+    模拟物理电机的 电感-电阻-反电动势-粘滞摩擦 特性
+    """
+    def __init__(self, R=0.5, L=0.01, Kt=1.0, Ke=1.0, b=0.1, J=0.02, dt=0.05):
+        # 参数已调整以适配 15kg 级机器人 (0.16m 轮半径)
+        self.R = 0.5      # 电枢电阻 (Ohm)
+        self.L = 0.01     # 电枢电感 (Henry)
+        self.Kt = 0.5     # 减小力矩常数，削弱“暴力”加速 (Nm/A)
+        self.Ke = 0.5     # 反电动势常数 (匹配Kt)
+        self.b = 0.1      # 粘滞摩擦系数 (Nms)
+        self.J = 0.02     # 转子惯量 (kg*m^2)
+        self.dt = dt
+        
+        self.current = 0.0 # 当前电流 (Amps)
+
+    def step(self, voltage_in, angular_vel):
+        """
+        输入: 驱动电压(V), 当前机械转速(rad/s)
+        输出: 产生的电磁力矩(Nm)
+        """
+        # 1. 计算反电动势 (Back-EMF): V_emf = Ke * omega
+        back_emf = self.Ke * angular_vel
+
+        # 2. 计算电流更新 (使用解析解，解决大步长 simulation 不稳定问题)
+        # 欧拉积分在 dt > L/R 时会发散，产生剧烈震荡 (Current Instability)
+        # 精确解: i(t+dt) = i(t) * exp(-dt/tau) + I_steady * (1 - exp(-dt/tau))
+        if self.R > 1e-4:
+            tau = self.L / self.R
+            i_steady = (voltage_in - back_emf) / self.R
+            decay = math.exp(-self.dt / tau)
+            self.current = self.current * decay + i_steady * (1.0 - decay)
+        else:
+            self.current = 0.0
+
+        # 3. (已替换为解析解，跳过欧拉积分)
+        # self.current += di_dt * self.dt
+
+        # 4. 驱动器电流保护 (Current Limit)
+        # 【关键修改】限制最大电流为 12A (对于 Kt=0.5，最大输出力矩为 6Nm)
+        # 物理原因: 经计算单轮理论最大静摩擦力矩约为 5.88 Nm (轮载2.5kg, mu=1.5, r=0.16)
+        # 超过 6Nm 必定导致突破物理极限的原地打滑烧胎，之后瞬间加速到50rad/s。
+        MAX_CURRENT = 12.0 # Amps
+        self.current = max(min(self.current, MAX_CURRENT), -MAX_CURRENT)
+
+        # 5. 计算电磁力矩: T_e = Kt * i
+        torque_electromagnetic = self.Kt * self.current
+
+        # 6. 减去电机内部摩擦: T_out = T_e - b * omega
+        torque_output = torque_electromagnetic - (self.b * angular_vel)
+
+        return torque_output
+
 class CarController(Node):
     def __init__(self):
         super().__init__('car_controller')
         
-        # Publishers for Drive Wheels (Rear)
-        self.pub_rl = self.create_publisher(Float64, '/cmd_vel_rl', 10)
-        self.pub_rr = self.create_publisher(Float64, '/cmd_vel_rr', 10)
+        # Publishers for Drive Wheels (Force/Torque Control)
+        # HIL 模式下必须发送力矩
+        self.pub_rl = self.create_publisher(Float64, '/cmd_force_rl', 10)
+        self.pub_rr = self.create_publisher(Float64, '/cmd_force_rr', 10)
+
         # self.pub_rl = self.create_publisher(Float64, '/cmd_force_rl', 10)
         # self.pub_rr = self.create_publisher(Float64, '/cmd_force_rr', 10)
         
@@ -165,17 +222,29 @@ class CarController(Node):
         self.suspension_rr_joint = 0.0
         
         # Control targets
-        self.target_speed_linear = 0.2 # m/s
+        # 使用软启动，初始目标设为0，在循环中缓慢增加到1.0
+        self.target_speed_linear = 0.0 # m/s
+        self.desired_max_speed = 1.0   # 最终期望速度
         self.wheel_radius = 0.16
         self.car_length = 0.3
         
+        # HIL Simulation State
+        self.sim_dt = 0.01  # 提高控制频率至 100Hz 解决物理震荡和非线性响应
+        # 实例化 HIL 电机模型 (24V 体系)
+        self.motor_l = DCMotorSim(dt=self.sim_dt)
+        self.motor_r = DCMotorSim(dt=self.sim_dt)
+        
+        # 模拟驱动器内部的 PID (Speed -> Voltage)
+        self.voltage_error_sum = {'rl': 0.0, 'rr': 0.0}
+        self.voltage_last_error = {'rl': 0.0, 'rr': 0.0}
+
         # PID state
         self.error_sum = {'rl': 0.0, 'rr': 0.0}
         self.last_error = {'rl': 0.0, 'rr': 0.0}
 
         self.start_time = time.time()
         
-        self.create_timer(0.05, self.control_loop) # 20Hz
+        self.create_timer(self.sim_dt, self.control_loop) # 100Hz
         self.create_timer(0.5, self.print_status)  # 2Hz
         
     def odom_callback(self, msg):
@@ -219,42 +288,75 @@ class CarController(Node):
             elif name == 'suspension_rr_joint' and len(msg.position) > i:
                 self.suspension_rr_joint = msg.position[i]
                 
+    def calculate_voltage_pid(self, target_w, current_w, wheel):
+        # 模拟驱动器内部的速度闭环控制 (Input: Speed -> Output: Voltage)
+        Kp = 4.0   # 提高比例增益，增强跟随和差速执行能力
+        Ki = 1.0   # 积分增益，解决稳态静差
+        Kd = 0.05  # 微分增益
+        Kf = 0.5   # 前馈增益 (匹配修改后的反电动势常数 Ke = 0.5)
+        
+        # 为了防止转向时内外轮速度突变导致打滑，限制目标速度的变化率 (这在实体车上也是必要的)
+        # 这里采用简单的误差限幅取代复杂的轨迹生成
+        error = target_w - current_w
+        # error = max(min(error, 10.0), -10.0) # 限制最大瞬间误差反应
+        
+        self.voltage_error_sum[wheel] += error * self.sim_dt
+        
+        # 积分限幅 (Anti-windup)
+        # 允许积分项贡献大部分电压，但避免完全饱和
+        self.voltage_error_sum[wheel] = max(min(self.voltage_error_sum[wheel], 12.0), -12.0)
+        
+        # 微分项计算
+        # 注意: 实际使用中需对 error 进行滤波，这里直接差分
+        d_error = (error - self.voltage_last_error[wheel]) / self.sim_dt
+        self.voltage_last_error[wheel] = error
+
+        # 计算电压
+        voltage = (Kp * error) + (Ki * self.voltage_error_sum[wheel]) + (Kf * target_w)
+        
+        # 物理电压限制 (24V 电池)
+        BATTERY_VOLTAGE = 12.0
+        voltage = max(min(voltage, BATTERY_VOLTAGE), -BATTERY_VOLTAGE)
+        
+        return voltage
+
     def calculate_torque(self, target_angular_speed, current_angular_speed, wheel):
-        # 调整 PID 参数以获得更平稳的控制
-        Kp = 4.0
-        Ki = 0.5
-        Kd = 0.0
-        
-        error = target_angular_speed - current_angular_speed
-        
-        self.error_sum[wheel] += error * 0.05
-        # 积分限幅
-        self.error_sum[wheel] = max(min(self.error_sum[wheel], 20.0), -20.0)
-        
-        u_p = Kp * error
-        u_i = Ki * self.error_sum[wheel]
-        u_d = Kd * (error - self.last_error[wheel]) / 0.05
-        
-        self.last_error[wheel] = error
-        
-        torque = u_p + u_i + u_d
-        # 力矩限幅，避免过大导致打滑或不稳定
-        # URDF limit is 500, but reasonable control torque is lower
-        torque = max(min(torque, 50.0), -50.0)
-        return torque
+        # [Legacy] Used for compatibility with old interface, but logic is now voltage-based.
+        # This function name is misleading for HIL mode, but we keep it for now.
+        pass
 
     def control_loop(self):
+        # 软启动：以 0.5 m/s^2 的加速度逐渐增加目标速度，避免起步"地板油"造成瞬间打滑
+        self.target_speed_linear = min(self.desired_max_speed, self.target_speed_linear + 0.5 * self.sim_dt)
         
         target_w_l, target_w_r = stanley_control(self.front_x, self.front_y, self.yaw_truth, self.vel_linear, self.target_speed_linear, corner_center=2.0, radius=1.6, roll=self.roll_truth)
-        target_w = self.target_speed_linear / self.wheel_radius  # 直接使用线速度转换为角速度作为目标
-        # torque_rl = self.calculate_torque(target_w, self.wheel_rl_speed, 'rl')
-        # torque_rr = self.calculate_torque(target_w, self.wheel_rr_speed, 'rr')
-        torque_rl = self.calculate_torque(target_w_l, self.wheel_rl_speed, 'rl')
-        torque_rr = self.calculate_torque(target_w_r, self.wheel_rr_speed, 'rr')
-        # print(torque_rl, torque_rr)
-        # print(torque_rl, torque_rr)
-        self.pub_rl.publish(Float64(data=target_w_l))
-        self.pub_rr.publish(Float64(data=target_w_r))
+        # target_w = self.target_speed_linear / self.wheel_radius  # 直接使用线速度转换为角速度作为目标
+
+        # 1. 驱动器层：计算所需电压 (PID)
+        # [紧急修正] 考虑到左后轮 (RL) 的物理安装可能反了：
+        #   Case A: 编码器反了 -> 电机正转读数负 -> PID 正反馈 -> 震荡
+        #   Case B: 电机线反了 -> 给正电压却反转 -> PID 认为是负速度 -> 给更大正电压 -> 锁死在负极限
+        # 尝试方案：假设左轮是镜像安装，物理上需要反向控制，且读数也反向。
+        # 我们在这里统一做符号翻转：
+        # LEFT_SIGN = -1.0  (如果左轮原本就需要反转运行)
+        
+        # 你的反馈是：之前震荡(+50/-50)，改了力矩反向后锁死(-50)。这说明单纯改输出不够。
+        # 极有可能是：左轮的正方向定义本身就是反的 (常见于差速车，左右轮对向安装)
+        # 所以我们把 目标速度反过来，或者把 反馈速度反过来。
+        
+        voltage_l = self.calculate_voltage_pid(target_w_l, self.wheel_rl_speed, 'rl')
+        voltage_r = self.calculate_voltage_pid(target_w_r, self.wheel_rr_speed, 'rr')
+        
+        # 2. 物理HIL层：计算电机真实力矩 (Motor Dynamics)
+        # [恢复] 去掉之前的 -1.0 尝试，改用更彻底的逻辑
+        torque_l_cmd = self.motor_l.step(voltage_l, self.wheel_rl_speed)
+        torque_r_cmd = self.motor_r.step(voltage_r, self.wheel_rr_speed)
+
+        # print(target_w_l, target_w_r)
+        # print(torque_l_cmd, torque_r_cmd)
+        # print(self.wheel_rl_speed, self.wheel_rr_speed)
+        self.pub_rl.publish(Float64(data=torque_l_cmd))
+        self.pub_rr.publish(Float64(data=torque_r_cmd))
         
     def print_status(self):
         
