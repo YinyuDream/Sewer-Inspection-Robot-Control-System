@@ -66,21 +66,21 @@ osThreadId_t CanDataCenterHandle;
 const osThreadAttr_t CanDataCenter_attributes = {
   .name = "CanDataCenter",
   .stack_size = 256 * 4,
-  .priority = (osPriority_t) osPriorityLow,
+  .priority = (osPriority_t) osPriorityAboveNormal,
 };
 /* Definitions for PowerManagement */
 osThreadId_t PowerManagementHandle;
 const osThreadAttr_t PowerManagement_attributes = {
   .name = "PowerManagement",
   .stack_size = 256 * 4,
-  .priority = (osPriority_t) osPriorityLow,
+  .priority = (osPriority_t) osPriorityBelowNormal,
 };
 /* Definitions for EkfAlgorithm */
 osThreadId_t EkfAlgorithmHandle;
 const osThreadAttr_t EkfAlgorithm_attributes = {
   .name = "EkfAlgorithm",
   .stack_size = 256 * 4,
-  .priority = (osPriority_t) osPriorityLow,
+  .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for canRxQueue */
 osMessageQueueId_t canRxQueueHandle;
