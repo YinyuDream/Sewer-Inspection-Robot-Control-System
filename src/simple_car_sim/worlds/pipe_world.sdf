@@ -20,15 +20,6 @@
       filename="ignition-gazebo-scene-broadcaster-system"
       name="ignition::gazebo::systems::SceneBroadcaster">
     </plugin>
-    <plugin
-      filename="ignition-gazebo-sensors-system"
-      name="ignition::gazebo::systems::Sensors">
-      <render_engine>ogre2</render_engine>
-    </plugin>
-    <plugin
-      filename="ignition-gazebo-imu-system"
-      name="ignition::gazebo::systems::Imu">
-    </plugin>
 
     <!-- 光照设置 (太阳光) -->
     <light type="directional" name="sun">

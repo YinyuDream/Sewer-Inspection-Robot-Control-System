@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import Float64
 from can_msgs.msg import Frame
 from std_msgs.msg import String
 from nav_msgs.msg import Odometry
@@ -21,7 +22,12 @@ class CanTransceiver(Node):
             10)
         
         # 创建一个发布者，发布转化后的 ROS 话题
-        self.ros_pub = self.create_publisher(String, 'interpreted_can_data', 10)
+        # Publishes PWM values back to autonomous_control
+        # Independent topics for each control command as requested
+        self.pub_cmd_volts_l = self.create_publisher(Float64, '/cmd_volts_l', 10)
+        self.pub_cmd_volts_r = self.create_publisher(Float64, '/cmd_volts_r', 10)
+        self.pub_cmd_steer_l = self.create_publisher(Float64, '/cmd_steer_l', 10)
+        self.pub_cmd_steer_r = self.create_publisher(Float64, '/cmd_steer_r', 10)
 
         # --- 发送部分 ---
         # 订阅 ROS 控制指令 (例如 /cmd_vel)
@@ -45,18 +51,38 @@ class CanTransceiver(Node):
         self.can_pub = self.create_publisher(Frame, 'to_can_bus', 10)
         
         self.get_logger().info('CAN Transceiver Node has been started.')
-
-    def can_rx_callback(self, msg):
-        """
-        处理接收到的 CAN 帧 (CAN -> ROS)
-        """
-        can_id = msg.id
-        data_len = msg.dlc
-        data = bytes(msg.data[:data_len])
         
-        # 示例: 假设 ID 0x100 是速度反馈
-        if can_id >= 0x280 and can_id <= 0x28A:
-            self.decode_speed_msg(data)
+    def can_rx_callback(self, msg):
+        can_id = msg.id
+        data = msg.data
+        
+        # Mapping based on control.c output assumption:
+        # ID 0x300: Left Voltage
+        # ID 0x301: Right Voltage
+        # ID 0x302: Left Steer
+        # ID 0x303: Right Steer
+        
+        if can_id == 0x300: # Left Motor Voltage (mV + offset)
+            raw_val = struct.unpack('<H', bytes(data[:2]))[0] 
+            # Reverse: Raw = Val*1000 + 0x8000 -> Val = (Raw - 0x8000) / 1000.0
+            val = (raw_val - 0x8000) / 1000.0
+            self.pub_cmd_volts_l.publish(Float64(data=val))
+            
+        elif can_id == 0x301: # Right Motor Voltage
+            raw_val = struct.unpack('<H', bytes(data[:2]))[0] 
+            val = (raw_val - 0x8000) / 1000.0
+            self.pub_cmd_volts_r.publish(Float64(data=val))
+
+        elif can_id == 0x302: # Left Steer (mrad + offset) -> rad
+            raw_val = struct.unpack('<H', bytes(data[:2]))[0] 
+            val = (raw_val - 0x8000) / 1000.0
+            self.pub_cmd_steer_l.publish(Float64(data=val))
+
+        elif can_id == 0x303: # Right Steer (mrad + offset) -> rad
+            raw_val = struct.unpack('<H', bytes(data[:2]))[0] 
+            val = (raw_val - 0x8000) / 1000.0
+            self.pub_cmd_steer_r.publish(Float64(data=val))
+
 
     def send_can_float(self, can_id, value):
         """Helper to send a single float value as a CAN frame"""
@@ -114,12 +140,15 @@ class CanTransceiver(Node):
         """
         Encoders -> CAN (0x206 - 0x209)
         """
-        # 假设 JointState 中包含四个驱动轮的速度
-        if len(msg.velocity) >= 4:
-            self.send_can_float(0x206, msg.velocity[0])
-            self.send_can_float(0x207, msg.velocity[1])
-            self.send_can_float(0x208, msg.velocity[2])
-            self.send_can_float(0x209, msg.velocity[3])
+        # 根据 joint name 匹配对应的 CAN ID，发送速度值
+        for i, name in enumerate(msg.name):
+            if name == 'wheel_rl_joint' and len(msg.velocity) > i:
+                self.send_can_float(0x110, msg.velocity[i])
+                self.send_can_float(0x206, msg.velocity[i])
+            elif name == 'wheel_rr_joint' and len(msg.velocity) > i:
+                self.wheel_rr_speed = msg.velocity[i]
+                self.send_can_float(0x111, msg.velocity[i])
+                self.send_can_float(0x207, msg.velocity[i])
 
     def cmd_imu_callback(self, msg):
         """
@@ -139,23 +168,6 @@ class CanTransceiver(Node):
         self.send_can_float(0x203, gyro.x)
         self.send_can_float(0x204, gyro.y)
         self.send_can_float(0x205, gyro.z)
-
-    def decode_speed_msg(self, data):
-        """
-        示例解析逻辑
-        """
-        try:
-            # 假设数据格式: 4字节浮点数 (小端)
-            if len(data) >= 4:
-                value = struct.unpack('<f', data[0:4])[0]
-                
-                # 如果要接收 uint16_t 小端数字 (2字节), 使用 '<H'
-                # value_uint16 = struct.unpack('<H', data[0:2])[0]
-                
-                return value
-            
-        except Exception as e:
-            self.get_logger().error(f'Decoding error: {e}')
 
 def main(args=None):
     rclpy.init(args=args)

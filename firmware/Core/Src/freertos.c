@@ -191,8 +191,8 @@ void MotionControlTask(void *argument)
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN MotionControlTask */
   Robot_general data;
-  float status[15]; // 15个位姿真值输入
-  int16_t PWM_Value[4]; // 有4个电机的PWM控制输入
+  float status[20]; // 20个位姿真值输入
+  uint16_t PWM_Value[4]; // 有4个电机的PWM控制输入
   /* Infinite loop */
   for(;;)
   {

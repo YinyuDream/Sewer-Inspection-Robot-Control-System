@@ -20,6 +20,7 @@
 #include "main.h"
 #include "cmsis_os.h"
 #include "can.h"
+#include "tim.h"
 #include "usb_device.h"
 #include "gpio.h"
 
@@ -94,6 +95,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_CAN1_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
   CAN_Filter_Config(); // 1. 应用过滤器配置
@@ -108,6 +110,10 @@ int main(void)
     Error_Handler(); // 激活中断失败则进入死循环
   }
 
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
   /* USER CODE END 2 */
 
   /* Init scheduler */

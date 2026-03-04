@@ -131,42 +131,63 @@
         </joint>
 
         <gazebo reference="wheel_${prefix}_link">
+            <mu1>0.05</mu1>
+            <mu2>1.5</mu2>
+        </gazebo>
+    </xacro:macro>
+
+    <!-- Front Steerable Wheels Macro -->
+    <xacro:macro name="front_steer_wheel" params="prefix xyz_offset">
+        <xacro:suspension prefix="${prefix}" xyz_offset="${xyz_offset}"/>
+        
+        <link name="steer_${prefix}_link">
+            <visual>
+                <geometry><cylinder radius="0.05" length="0.05"/></geometry>
+                <material name="black"/>
+            </visual>
+            <xacro:cylinder_inertial mass="0.5" r="0.05" h="0.05"/>
+        </link>
+
+        <joint name="steer_${prefix}_joint" type="revolute">
+            <parent link="suspension_${prefix}_link"/>
+            <child link="steer_${prefix}_link"/>
+            <origin xyz="0 0 -0.10" rpy="0 0 0"/>
+            <axis xyz="0 0 1"/>
+            <limit lower="-0.6" upper="0.6" effort="500.0" velocity="10.0"/>
+            <dynamics damping="5.0" friction="1.0"/>
+        </joint>
+
+        <link name="wheel_${prefix}_link">
+            <visual>
+                <origin rpy="${pi/2} 0 0"/>
+                <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+                <material name="black"/>
+            </visual>
+            <collision>
+                <origin rpy="${pi/2} 0 0"/>
+                <geometry><sphere radius="${wheel_radius}"/></geometry>
+            </collision>
+            <xacro:cylinder_inertial mass="${mass_wheel}" r="${wheel_radius}" h="${wheel_width}"/>
+        </link>
+
+        <joint name="wheel_${prefix}_joint" type="continuous">
+            <parent link="steer_${prefix}_link"/>
+            <child link="wheel_${prefix}_link"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <axis xyz="0 1 0"/>
+            <limit effort="500.0" velocity="50.0"/>
+            <dynamics damping="0.1" friction="0.05"/>
+        </joint>
+
+        <gazebo reference="wheel_${prefix}_link">
             <mu1>1.0</mu1>
             <mu2>1.0</mu2>
         </gazebo>
     </xacro:macro>
 
-    <!-- Front Casters Macro (Passive, slide balls) -->
-    <xacro:macro name="front_caster" params="prefix xyz_offset">
-        <xacro:suspension prefix="${prefix}" xyz_offset="${xyz_offset}"/>
-        
-        <link name="caster_${prefix}_link">
-            <visual>
-                <geometry><sphere radius="${caster_radius}"/></geometry>
-                <material name="black"/>
-            </visual>
-            <collision>
-                <geometry><sphere radius="${caster_radius}"/></geometry>
-            </collision>
-            <xacro:sphere_inertial mass="${mass_caster}" r="${caster_radius}"/>
-        </link>
-
-        <joint name="caster_${prefix}_joint" type="fixed">
-            <parent link="suspension_${prefix}_link"/>
-            <child link="caster_${prefix}_link"/>
-            <origin xyz="0 0 -0.10" rpy="0 0 0"/>
-        </joint>
-
-        <!-- Low friction for casters -->
-        <gazebo reference="caster_${prefix}_link">
-            <mu1>0.0</mu1>
-            <mu2>0.0</mu2>
-        </gazebo>
-    </xacro:macro>
-
     <!-- Instantiate 4 Wheels/Casters -->
-    <xacro:front_caster prefix="fl" xyz_offset="0.30 0.34 -0.20"/>
-    <xacro:front_caster prefix="fr" xyz_offset="0.30 -0.34 -0.20"/>
+    <xacro:front_steer_wheel prefix="fl" xyz_offset="0.30 0.34 -0.20"/>
+    <xacro:front_steer_wheel prefix="fr" xyz_offset="0.30 -0.34 -0.20"/>
     <xacro:rear_wheel prefix="rl" xyz_offset="-0.30 0.34 -0.20"/>
     <xacro:rear_wheel prefix="rr" xyz_offset="-0.30 -0.34 -0.20"/>
 
@@ -189,6 +210,8 @@
     </joint>
 
     <gazebo reference="lidar_link">
+        <!-- Lidar Sensor Disabled -->
+        <!--
         <sensor name='lidar_sensor' type='gpu_lidar'>
             <pose>0 0 0 0 0 0</pose>
             <topic>/scan</topic>
@@ -217,6 +240,7 @@
             <always_on>1</always_on>
             <visualize>true</visualize>
         </sensor>
+        -->
     </gazebo>
 
     <!-- Camera Link and Sensor -->
@@ -238,6 +262,8 @@
     </joint>
 
     <gazebo reference="camera_link">
+        <!-- Camera Sensor Disabled -->
+        <!--
         <sensor name="camera_sensor" type="camera">
             <topic>/camera/image_raw</topic>
             <update_rate>30</update_rate>
@@ -256,6 +282,7 @@
             <always_on>1</always_on>
             <visualize>true</visualize>
         </sensor>
+        -->
     </gazebo>
 
     <!-- Gazebo Plugins -->
@@ -266,25 +293,24 @@
             <joint_name>wheel_rl_joint</joint_name>
             <joint_name>wheel_rr_joint</joint_name>
         </plugin>
-        
 
-        <!-- 使用 Joint Controller 进行速度控制 (新增) 
-        <plugin filename="libignition-gazebo-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
-            <joint_name>wheel_rl_joint</joint_name>
-            <initial_velocity>0.0</initial_velocity>
-            <p_gain>10.0</p_gain>
-            <i_gain>0.1</i_gain>
-            <d_gain>0.0</d_gain>
+        <!-- Steering Position Controllers -->
+        <plugin filename="libignition-gazebo-joint-position-controller-system.so" name="ignition::gazebo::systems::JointPositionController">
+            <joint_name>steer_fl_joint</joint_name>
+            <p_gain>15.0</p_gain>
+            <i_gain>0.01</i_gain>
+            <d_gain>0.2</d_gain>
+            <topic>/cmd_pos_fl</topic>
         </plugin>
         
-        <plugin filename="libignition-gazebo-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
-            <joint_name>wheel_rr_joint</joint_name>
-            <initial_velocity>0.0</initial_velocity>
-            <p_gain>10.0</p_gain>
-            <i_gain>0.1</i_gain>
-            <d_gain>0.0</d_gain>
+        <plugin filename="libignition-gazebo-joint-position-controller-system.so" name="ignition::gazebo::systems::JointPositionController">
+            <joint_name>steer_fr_joint</joint_name>
+            <p_gain>15.0</p_gain>
+            <i_gain>0.01</i_gain>
+            <d_gain>0.2</d_gain>
+            <topic>/cmd_pos_fr</topic>
         </plugin>
-        -->
+        
         <!-- Odometry Publisher (Provides Ground Truth position, velocity, heading) -->
         <plugin filename="libignition-gazebo-odometry-publisher-system.so" name="ignition::gazebo::systems::OdometryPublisher">
             <odom_publish_frequency>50</odom_publish_frequency>
@@ -303,6 +329,10 @@
             <topic>/model/simple_car/joint_states</topic>
             <joint_name>wheel_rl_joint</joint_name>
             <joint_name>wheel_rr_joint</joint_name>
+            <joint_name>steer_fl_joint</joint_name>
+            <joint_name>steer_fr_joint</joint_name>
+            <joint_name>wheel_fl_joint</joint_name>
+            <joint_name>wheel_fr_joint</joint_name>
             <joint_name>suspension_fl_joint</joint_name>
             <joint_name>suspension_fr_joint</joint_name>
             <joint_name>suspension_rl_joint</joint_name>

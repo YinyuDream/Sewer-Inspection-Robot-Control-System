@@ -12,7 +12,7 @@ def generate_pipe_obj(filename):
     """
     # 參數设置
     # 根据小车尺寸(~0.5m)进行调整
-    L_straight = 8.0  # 直线段长度
+    L_straight = 16.0  # 直线段长度
     R_corner = 1.6    # 拐角半径
     R_pipe = 0.8      # 管道半径
     N_circle = 32     # 管道截面圆的分段数（圆的平滑度）
@@ -20,10 +20,10 @@ def generate_pipe_obj(filename):
     N_straight_steps = 5 # 直线段的路径分段数（为了保持网格密度均匀）
     
     # 路径定义
-    # S = L_straight / 2 = 1.0 (直线的半长)
-    # R = R_corner = 1.5 (拐角半径)
+    # S = L_straight / 2 = 8.0 (直线的半长)
+    # R = R_corner = 1.6 (拐角半径)
     # 这里的路径是一个闭合的圆角矩形或者是类似的环形结构
-    # 中心点大致在: (+/- 1.0, +/- 1.0)
+    # 中心点大致在: (+/- 8.0, +/- 8.0)
     
     path_points = []   # 存储路径上的中心点坐标
     path_tangents = [] # 存储路径上每个点的切线方向（用于确定截面朝向）
