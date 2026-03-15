@@ -322,7 +322,7 @@ class CarController(Node):
         """初始化数据记录 CSV"""
         # Use ROS Time for logging consistency with simulation
         self.start_time = None 
-        self.log_file_path = '/home/yinyudream/robot/simulation_data.csv'
+        self.log_file_path = '/home/yinyudream/robot/simulation/control/simulation_data.csv'
         self.log_file = open(self.log_file_path, 'w', newline='')
         self.csv_writer = csv.writer(self.log_file)
         self.log_counter = 0  # Initialize counter for flush logic

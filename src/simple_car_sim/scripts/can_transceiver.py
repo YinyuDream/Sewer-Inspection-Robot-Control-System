@@ -17,7 +17,7 @@ class CanTransceiver(Node):
         # 订阅 ros2_socketcan 发布的话题 (默认 /from_can_bus)
         self.can_sub = self.create_subscription(
             Frame,
-            'from_can_bus',
+            '/from_can_bus',
             self.can_rx_callback,
             10)
         
@@ -48,37 +48,38 @@ class CanTransceiver(Node):
             10)
 
         # 创建一个发布者，将 CAN 帧发送给 ros2_socketcan (默认 /to_can_bus)
-        self.can_pub = self.create_publisher(Frame, 'to_can_bus', 10)
+        self.can_pub = self.create_publisher(Frame, '/to_can_bus', 10)
         
         self.get_logger().info('CAN Transceiver Node has been started.')
         
     def can_rx_callback(self, msg):
+        print(f"Received CAN frame ID: {hex(msg.id)}, Data: {msg.data.hex()}")
         can_id = msg.id
         data = msg.data
         
         # Mapping based on control.c output assumption:
-        # ID 0x300: Left Voltage
-        # ID 0x301: Right Voltage
-        # ID 0x302: Left Steer
-        # ID 0x303: Right Steer
+        # ID 0x180: Left Voltage
+        # ID 0x181: Right Voltage
+        # ID 0x182: Left Steer
+        # ID 0x183: Right Steer
         
-        if can_id == 0x300: # Left Motor Voltage (mV + offset)
+        if can_id == 0x180: # Left Motor Voltage (mV + offset)
             raw_val = struct.unpack('<H', bytes(data[:2]))[0] 
             # Reverse: Raw = Val*1000 + 0x8000 -> Val = (Raw - 0x8000) / 1000.0
             val = (raw_val - 0x8000) / 1000.0
             self.pub_cmd_volts_l.publish(Float64(data=val))
             
-        elif can_id == 0x301: # Right Motor Voltage
+        elif can_id == 0x181: # Right Motor Voltage
             raw_val = struct.unpack('<H', bytes(data[:2]))[0] 
             val = (raw_val - 0x8000) / 1000.0
             self.pub_cmd_volts_r.publish(Float64(data=val))
 
-        elif can_id == 0x302: # Left Steer (mrad + offset) -> rad
+        elif can_id == 0x182: # Left Steer (mrad + offset) -> rad
             raw_val = struct.unpack('<H', bytes(data[:2]))[0] 
             val = (raw_val - 0x8000) / 1000.0
             self.pub_cmd_steer_l.publish(Float64(data=val))
 
-        elif can_id == 0x303: # Right Steer (mrad + offset) -> rad
+        elif can_id == 0x183: # Right Steer (mrad + offset) -> rad
             raw_val = struct.unpack('<H', bytes(data[:2]))[0] 
             val = (raw_val - 0x8000) / 1000.0
             self.pub_cmd_steer_r.publish(Float64(data=val))
@@ -86,13 +87,18 @@ class CanTransceiver(Node):
 
     def send_can_float(self, can_id, value):
         """Helper to send a single float value as a CAN frame"""
+        # print(f"Sending CAN frame ID: {hex(can_id)}, Value: {value}")
         try:
             can_data = struct.pack('<f', float(value))
             frame = Frame()
-            frame.header.stamp = self.get_clock().now().to_msg()
+            # frame.header.stamp = self.get_clock().now().to_msg() # can_msgs/Frame typically has its own header structure or is simplified
             frame.id = can_id
             frame.dlc = 4
-            frame.data = list(can_data)
+            # Ensure data is exactly 8 bytes long as per uint8[8] definition
+            full_data = [0] * 8
+            for i, b in enumerate(can_data):
+                full_data[i] = b
+            frame.data = full_data
             self.can_pub.publish(frame)
         except Exception as e:
             self.get_logger().error(f'CAN send error ID {hex(can_id)}: {e}')

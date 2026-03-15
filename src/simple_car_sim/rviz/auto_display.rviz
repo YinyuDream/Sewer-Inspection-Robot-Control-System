@@ -1,0 +1,70 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 78
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Status1
+        - /TF1
+      Splitter Ratio: 0.5
+    Tree Height: 600
+  - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+Visualization Manager:
+  Class: ""
+  Name: "Visualization Manager"
+  Global Options:
+    Fixed Frame: "odom"
+    Frame Rate: 30
+  Displays:
+    - Name: Grid
+      Class: rviz_default_plugins/Grid
+      Enabled: true
+      Cell Size: 1
+      Color: 160; 160; 164
+    - Name: TF
+      Class: rviz_default_plugins/TF
+      Enabled: true
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+    - Name: Robot Model
+      Class: rviz_default_plugins/RobotModel
+      Enabled: true
+      Robot Description: /robot_description
+    - Name: Odometry
+      Class: rviz_default_plugins/Odometry
+      Enabled: true
+      Topic: /odom
+      Shape: Arrow
+      Color: 255; 0; 0
+    - Name: LaserScan
+      Class: rviz_default_plugins/LaserScan
+      Enabled: false
+      Topic: /scan
+    - Name: Camera Image
+      Class: rviz_default_plugins/Image
+      Enabled: false
+      Topic: /camera/image_raw
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Measure
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Current View
+      Target Frame: <Fixed Frame>
+      Distance: 10
+      Focal Point: 0; 0; 0
+      Pitch: 0.5
+      Yaw: 0.5
+Window Geometry:
+  X: 100
+  Y: 100
+  Width: 1200
+  Height: 800

@@ -112,6 +112,7 @@ void MotionControlTask(void *argument);
 void CanCommunicationTask(void *argument);
 void PowerHandleTask(void *argument);
 void NavigationEkfTask(void *argument);
+void MonitorTask(void *argument);
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -169,7 +170,13 @@ void MX_FREERTOS_Init(void) {
   EkfAlgorithmHandle = osThreadNew(NavigationEkfTask, NULL, &EkfAlgorithm_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
+  /* creation of MonitorTask */
+  const osThreadAttr_t MonitorTask_attributes = {
+    .name = "MonitorTask",
+    .stack_size = 256 * 4,
+    .priority = (osPriority_t) osPriorityLow,
+  };
+  osThreadNew(MonitorTask, NULL, &MonitorTask_attributes);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -196,14 +203,42 @@ void MotionControlTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
+    
     if (osMessageQueueGet(motionControlHandle, &data, NULL, osWaitForever) == osOK)
     {
+        uint32_t start_tick = HAL_GetTick(); // 记录开始时间用于性能测试
+        char *runTimeStats = pvPortMalloc(1024); // 动态分配 1KB 避免撑爆任务原本的栈
+        
         // 这里可以处理运动控制相关的 CAN 数据，例如 位置、速度、加速度等
         // 将数据输入到运动控制算法中进行计算
         status[data.id - 0x100] = data.FloatBytes.f; // 假设前两个字节是一个状态值，单位转换
         motion_control_algorithm(status, PWM_Value); // 运动控制算法处理，输出 PWM 控制值
         for (uint16_t i = 0; i < 4; i++) {
           CAN_Send_Data(0x180 + i, (uint8_t *)&PWM_Value[i], 2); // 将控制结果通过 CAN 发送出去，ID 从 0x180 开始
+          osDelay(1); // 防止CAN邮箱溢满导致最后的数据包被丢弃
+        }
+        
+        uint32_t exec_tick = HAL_GetTick() - start_tick; // 计算算法单次执行耗时
+        data.FloatBytes.f = (float)exec_tick; // 将耗时转换为float发送
+        
+        osDelay(1); // 防止CAN邮箱溢满丢包
+        CAN_Send_Data(0x400, data.FloatBytes.bytes, 4); // ID 0x400 用于性能监控反馈
+
+        if (runTimeStats != NULL) {
+            memset(runTimeStats, 0, 1024);
+            vTaskGetRunTimeStats(runTimeStats);
+            
+            // 先发送 Header
+            char headerBuf[64];
+            int hLen = snprintf(headerBuf, sizeof(headerBuf), "MotionCtrl Runtime: %lu ms\r\n", (unsigned long)exec_tick);
+            CDC_Transmit_FS((uint8_t *)headerBuf, hLen);
+            
+            osDelay(2); // 延时等待 USB 硬件发完
+            
+            // 再发送统计体
+            CDC_Transmit_FS((uint8_t *)runTimeStats, strlen(runTimeStats));
+            
+            vPortFree(runTimeStats); // 用完释放
         }
     }
   }
@@ -253,7 +288,10 @@ void CanCommunicationTask(void *argument)
         } else if (rxPacket.header.StdId >= 0x200 && rxPacket.header.StdId <= 0x2FF) {
             // 传感器数据融合相关
             osMessageQueuePut(sensorEkfDataHandle, &data, 0, 0); // 将传感器数据推入 EKF 队列
-        }else {
+        } else if (rxPacket.header.StdId == 0x700) {
+            // 环回测试接口 (Ping-Pong Test)，用于测试丢包率和总线延迟
+            CAN_Send_Data(0x701, rxPacket.data, rxPacket.header.DLC);
+        } else {
             // 其他 ID 的数据
         }
     }
@@ -322,6 +360,38 @@ void NavigationEkfTask(void *argument)
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+void MonitorTask(void *argument)
+{
+  /* 
+   * 获取各个任务堆栈的高水位线（即史上最小剩余可用空间）
+   * 如果某个任务高水位线经常返回很小的值（如10以下），则说明有栈溢出的风险
+   */
+  Robot_general data;
+  data.id = 0x500; // 专属监控基准ID，后续+1区分不同任务
 
+  for(;;)
+  {
+    // 等待 2 秒发送一次
+    osDelay(2000);
+
+    // 1. 发送 MotionControlTask (ContorlHandle) 的高水位 [ID: 0x500]
+    data.FloatBytes.f = (float)uxTaskGetStackHighWaterMark(ContorlHandle);
+    CAN_Send_Data(0x500, data.FloatBytes.bytes, 4);
+
+    // 2. 发送 CanDataCenterTask 的高水位 [ID: 0x501]
+    data.FloatBytes.f = (float)uxTaskGetStackHighWaterMark(CanDataCenterHandle);
+    CAN_Send_Data(0x501, data.FloatBytes.bytes, 4);
+
+    // 3. 发送 EkfAlgorithmTask 的高水位 [ID: 0x502]
+    data.FloatBytes.f = (float)uxTaskGetStackHighWaterMark(EkfAlgorithmHandle);
+    CAN_Send_Data(0x502, data.FloatBytes.bytes, 4);
+
+    // 4. 发送 PowerManagementTask 的高水位 [ID: 0x503]
+    data.FloatBytes.f = (float)uxTaskGetStackHighWaterMark(PowerManagementHandle);
+    CAN_Send_Data(0x503, data.FloatBytes.bytes, 4);
+    
+    // (如果开启了 vTaskGetRunTimeStats)，还可以用同样的方式发CPU占用率，在此为了兼容未开启宏的情况，仅展示栈空间。
+  }
+}
 /* USER CODE END Application */
 

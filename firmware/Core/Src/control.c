@@ -265,7 +265,7 @@ void motion_control_algorithm(float *status, uint16_t *PWM_Value) {
     PWM_Value[0] = (uint16_t)(voltage_l * 1000.0f) + 0x8000;
     PWM_Value[1] = (uint16_t)(voltage_r * 1000.0f) + 0x8000;
     PWM_Value[2] = (uint16_t)(delta_l * 1000.0f) + 0x8000;
-    PWM_Value[3] = (uint16_t)(delta_r * 1000.0f + 0x8000);
+    PWM_Value[3] = (uint16_t)(delta_r * 1000.0f) + 0x8000;
 
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, (uint16_t)( ((uint32_t)PWM_Value[0] * 1000) / 4095 ));
     __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, (uint16_t)( ((uint32_t)PWM_Value[1] * 1000) / 4095 ));

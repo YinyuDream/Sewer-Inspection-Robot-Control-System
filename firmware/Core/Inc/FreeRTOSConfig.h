@@ -164,7 +164,23 @@ standard names. */
 #define USE_CUSTOM_SYSTICK_HANDLER_IMPLEMENTATION 0
 
 /* USER CODE BEGIN Defines */
-/* Section where parameter definitions can be added (for instance, to override default ones in FreeRTOS.h) */
+#include "stm32f4xx.h"  /* 加入这一行，引入 DWT 和 CoreDebug 的底层寄存器定义 */
+
+#define configGENERATE_RUN_TIME_STATS 1
+#define configUSE_STATS_FORMATTING_FUNCTIONS 1
+
+/* 这是一个著名的 "黑科技" 用法：直接利用 STM32F4 内核自带的 DWT(Data Watchpoint and Trace) 周期计数器。
+   它的好处是完全不需要额外去配 TIM 定时器，直接获取内核纳秒级运行数据。 */
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() do { \
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; \
+    DWT->CYCCNT = 0; \
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk; \
+} while(0)
+
+/* 直接返回 CPU 周期数。
+   注意：在 STM32F4 上，这个值每几十秒（2^32 / 168MHz = 25秒）就会溢出。
+   非常适合用于几秒钟到十几秒的短时间 HIL 性能采样分析！ */
+#define portGET_RUN_TIME_COUNTER_VALUE() (DWT->CYCCNT)
 /* USER CODE END Defines */
 
 #endif /* FREERTOS_CONFIG_H */

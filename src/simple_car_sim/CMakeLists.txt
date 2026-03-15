@@ -46,7 +46,6 @@ install(DIRECTORY
   urdf
   worlds
   rviz
-  # scripts  <-- Commented out or removed if we install specific programs
   DESTINATION share/${PROJECT_NAME}
 )
 
@@ -55,13 +54,6 @@ install(PROGRAMS
   scripts/can_transceiver.py
   scripts/battery_sim.py
   scripts/slam_interface.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-# 安装可执行脚本
-# 将 Python 脚本安装到 lib/simple_car_sim 目录下，使其可以通过 `ros2 run` 执行
-install(PROGRAMS
-  scripts/autonomous_control.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

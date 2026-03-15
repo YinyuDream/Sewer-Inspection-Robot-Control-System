@@ -51,7 +51,7 @@ void CAN_Send_Data(uint16_t id, uint8_t *data, uint8_t len)
     // 请求发送消息并添加到发送邮箱
     if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, data, &TxMailbox) != HAL_OK)
     {
-        Error_Handler(); // 发送失败则进入死循环
+        // Error_Handler(); // 发送失败则进入死循环
     }
 }
 

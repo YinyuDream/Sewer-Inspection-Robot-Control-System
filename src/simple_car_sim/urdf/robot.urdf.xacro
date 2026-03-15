@@ -211,7 +211,7 @@
 
     <gazebo reference="lidar_link">
         <!-- Lidar Sensor Disabled -->
-        <!--
+        
         <sensor name='lidar_sensor' type='gpu_lidar'>
             <pose>0 0 0 0 0 0</pose>
             <topic>/scan</topic>
@@ -240,7 +240,7 @@
             <always_on>1</always_on>
             <visualize>true</visualize>
         </sensor>
-        -->
+        
     </gazebo>
 
     <!-- Camera Link and Sensor -->
@@ -263,7 +263,7 @@
 
     <gazebo reference="camera_link">
         <!-- Camera Sensor Disabled -->
-        <!--
+        
         <sensor name="camera_sensor" type="camera">
             <topic>/camera/image_raw</topic>
             <update_rate>30</update_rate>
@@ -282,7 +282,7 @@
             <always_on>1</always_on>
             <visualize>true</visualize>
         </sensor>
-        -->
+        
     </gazebo>
 
     <!-- Gazebo Plugins -->
