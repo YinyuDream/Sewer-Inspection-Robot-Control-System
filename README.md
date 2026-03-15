@@ -31,7 +31,7 @@
 
 辅助脚本位于 `scripts/` 目录。
 
-### 1) 启动完整仿真（推荐，SIL）
+### 1) 启动仿真器（SIL/HIL 通用第一步）
 
 ```bash
 bash scripts/Gazebo.sh
@@ -39,7 +39,7 @@ bash scripts/Gazebo.sh
 
 该脚本会构建 `simple_car_sim` 并启动 `simulation.launch.py`（Gazebo + 机器人 + RViz）。
 
-### 2) 单独运行控制节点（SIL）
+### 2) 启动控制节点（SIL 第二步）
 
 ```bash
 bash scripts/SIL.sh
@@ -48,13 +48,17 @@ source install/setup.bash
 ros2 run simple_car_sim autonomous_control.py --ros-args -p use_sim_time:=true
 ```
 
-### 3) 启动 HIL 通信与控制链路
+> SIL 需要以上两步同时运行：`Gazebo.sh` + `SIL.sh`。
+
+### 3) 启动 HIL 通信与控制链路（HIL 第二步）
 
 ```bash
 bash scripts/HIL.sh
 ```
 
 该脚本启动 `robot_system.launch.py`（`ros2_socketcan` + `can_transceiver.py` + `autonomous_control.py`）。
+
+> HIL 同样需要两步同时运行：`Gazebo.sh` + `HIL.sh`。
 
 > HIL 需要实际硬件（STM32 + CAN 设备，如 `can0`）。SocketCAN 配置、虚拟 CAN 测试与刷写流程请见 `Explain.md`。
 

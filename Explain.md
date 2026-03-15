@@ -97,8 +97,8 @@
 robot/
 ├── scripts/
 │   ├── Gazebo.sh                   # 一键构建并启动仿真环境
-│   ├── HIL.sh                      # 启动纯 HIL 环境桥接
-│   └── SIL.sh                      # 单独运行 autonomous_control 节点 (SIL)
+│   ├── HIL.sh                      # 启动 HIL 通信与控制链路（需配合 Gazebo.sh）
+│   └── SIL.sh                      # 启动 autonomous_control 节点（需配合 Gazebo.sh）
 ├── create_pipe_world.py            # 生成管道 world/mesh
 ├── simulation/
 │   ├── STM32/                      # HIL 压力测试与数据
@@ -659,6 +659,8 @@ source install/setup.bash
 ros2 launch simple_car_sim simulation.launch.py
 ```
 
+> `Gazebo.sh` 仅启动仿真环境（Gazebo + 模型 + RViz），不单独包含控制闭环。
+
 > **提示：** `scripts/Gazebo.sh` 执行完整重建。若仅修改 Python / Launch / URDF 文件，可使用 `--symlink-install` 加速构建：
 > ```bash
 > colcon build --symlink-install --packages-select simple_car_sim
@@ -673,6 +675,20 @@ ros2 run simple_car_sim autonomous_control.py --ros-args -p use_sim_time:=true
 # 或直接使用脚本：
 bash scripts/SIL.sh
 ```
+
+> SIL 实际运行需要两步：先 `bash scripts/Gazebo.sh`，再 `bash scripts/SIL.sh`。
+
+### HIL 联调运行（仿真 + CAN + 控制）
+
+```bash
+# 第一步：启动仿真器
+bash scripts/Gazebo.sh
+
+# 第二步：启动 HIL 通信与控制链路
+bash scripts/HIL.sh
+```
+
+> HIL 同样是双脚本协同：`Gazebo.sh` + `HIL.sh`。其中 `HIL.sh` 启动 `robot_system.launch.py`（`ros2_socketcan` + `can_transceiver.py` + `autonomous_control.py`）。
 
 ### 纯 SIL 模式（无需 STM32）
 
