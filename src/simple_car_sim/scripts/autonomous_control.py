@@ -301,7 +301,7 @@ class CarController(Node):
         # 转向平滑辅助
         self.current_delta = 0.0
         self.filtered_delta = 0.0
-        self.delta_slew_rate = 100.0  # rad/s, maximum steering speed
+        self.delta_slew_rate = 10.0  # rad/s, maximum steering speed
 
     def _init_simulation_config(self):
         """初始化物理与仿真配置"""
@@ -310,7 +310,7 @@ class CarController(Node):
         self.wheel_radius = 0.16
         self.car_length = 0.3
         
-        self.sim_dt = 0.01  # 仿真步长 (100Hz)
+        self.sim_dt = 0.01  # 仿真步长 (50Hz)
         self.motor_l = DCMotorSim(dt=self.sim_dt)
         self.motor_r = DCMotorSim(dt=self.sim_dt)
         
@@ -368,9 +368,9 @@ class CarController(Node):
     def joint_state_callback(self, msg):
         for i, name in enumerate(msg.name):
             if name == 'wheel_rl_joint' and len(msg.velocity) > i:
-                self.wheel_rl_speed = msg.velocity[i]
+                self.wheel_rl_speed = 0.05 * msg.velocity[i] + 0.95 * self.wheel_rl_speed
             elif name == 'wheel_rr_joint' and len(msg.velocity) > i:
-                self.wheel_rr_speed = msg.velocity[i]
+                self.wheel_rr_speed = 0.05 * msg.velocity[i] + 0.95 * self.wheel_rr_speed
             elif name == 'suspension_fl_joint' and len(msg.position) > i:
                 self.suspension_fl_joint = msg.position[i]
             elif name == 'suspension_fr_joint' and len(msg.position) > i:
@@ -484,6 +484,19 @@ class CarController(Node):
         torque_l_cmd = self.motor_l.step(voltage_l, self.wheel_rl_speed)
         torque_r_cmd = self.motor_r.step(voltage_r, self.wheel_rr_speed)
 
+        if not hasattr(self, '_diag_count'):
+            self._diag_count = 0
+        self._diag_count += 1
+        if self._diag_count % 100 == 0:
+            import math
+            self.get_logger().info(
+                f"[AC_DIAG] pos=({self.pos_x:.3f},{self.pos_y:.3f}) "
+                f"ext_steer=({math.degrees(self.ext_steer_l):.2f}°,{math.degrees(self.ext_steer_r):.2f}°) "
+                f"ext_volt=({self.ext_volts_l:.3f},{self.ext_volts_r:.3f}) "
+                f"torque=({torque_l_cmd:.3f},{torque_r_cmd:.3f}) "
+                f"wheel_spd=({self.wheel_rl_speed:.3f},{self.wheel_rr_speed:.3f})"
+            )
+
         self.pub_rl.publish(Float64(data=torque_l_cmd))
         self.pub_rr.publish(Float64(data=torque_r_cmd))
 
@@ -517,14 +530,14 @@ class CarController(Node):
             self.target_speed_linear, corner_center=8.0, radius=1.6, 
             roll=self.roll_truth, sum_roll=self.error_roll_sum, roll_rate=self.imu_roll_rate
         )
-        print(f"Target W: L={target_w_l:.2f}, R={target_w_r:.2f} | Delta: {math.degrees(delta):.2f} deg | Lat Err: {e_geo:.3f}m | Hdg Err: {math.degrees(theta_e):.2f} deg")
-        now = self.get_clock().now().nanoseconds / 1e9
-        print(f"--- Time: {now - self.start_time:.1f} s ---")
-        print(f"[Ground Truth] Pos: ({self.pos_x:.2f}, {self.pos_y:.2f})  Vel: {self.vel_linear:.2f} m/s")
-        print(f"[Orientation ] Roll: {math.degrees(self.roll_truth):.1f} deg  Pitch: {math.degrees(self.pitch_truth):.1f} deg  Yaw: {math.degrees(self.yaw_truth):.1f} deg")
-        print(f"[IMU Sensor  ] Accel X: {self.imu_accel_x:.2f} m/s^2  Yaw: {math.degrees(self.imu_yaw):.1f} deg  Yaw Rate: {math.degrees(self.imu_angular_vel_z):.1f} deg/s")
-        print(f"[Encoder     ] RL Speed: {self.wheel_rl_speed:.1f} rad/s  RR Speed: {self.wheel_rr_speed:.1f} rad/s")
-        print(f"[Suspension  ] FL: {self.suspension_fl_joint:.3f} deg  FR: {self.suspension_fr_joint:.3f} deg  RL: {self.suspension_rl_joint:.3f} deg  RR: {self.suspension_rr_joint:.3f} deg")
+        # print(f"Target W: L={target_w_l:.2f}, R={target_w_r:.2f} | Delta: {math.degrees(delta):.2f} deg | Lat Err: {e_geo:.3f}m | Hdg Err: {math.degrees(theta_e):.2f} deg")
+        # now = self.get_clock().now().nanoseconds / 1e9
+        # print(f"--- Time: {now - self.start_time:.1f} s ---")
+        # print(f"[Ground Truth] Pos: ({self.pos_x:.2f}, {self.pos_y:.2f})  Vel: {self.vel_linear:.2f} m/s")
+        # print(f"[Orientation ] Roll: {math.degrees(self.roll_truth):.1f} deg  Pitch: {math.degrees(self.pitch_truth):.1f} deg  Yaw: {math.degrees(self.yaw_truth):.1f} deg")
+        # print(f"[IMU Sensor  ] Accel X: {self.imu_accel_x:.2f} m/s^2  Yaw: {math.degrees(self.imu_yaw):.1f} deg  Yaw Rate: {math.degrees(self.imu_angular_vel_z):.1f} deg/s")
+        # print(f"[Encoder     ] RL Speed: {self.wheel_rl_speed:.1f} rad/s  RR Speed: {self.wheel_rr_speed:.1f} rad/s")
+        # print(f"[Suspension  ] FL: {self.suspension_fl_joint:.3f} deg  FR: {self.suspension_fr_joint:.3f} deg  RL: {self.suspension_rl_joint:.3f} deg  RR: {self.suspension_rr_joint:.3f} deg")
 
 def main(args=None):
     rclpy.init(args=args)

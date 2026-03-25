@@ -1,6 +1,9 @@
+#include <string.h>
 #include "bsp_can.h"
 #include "FreeRTOS.h"
 #include "queue.h"
+
+
 
 // 注意：canRxQueueHandle 的实际定义放在了 freertos.c 中
 // 我们这里只是从 bsp_can.h 里面通过 extern 引用它
@@ -38,20 +41,41 @@ void CAN_Filter_Config(void)
  */
 void CAN_Send_Data(uint16_t id, uint8_t *data, uint8_t len)
 {
-    CAN_TxHeaderTypeDef TxHeader;
+    CAN_TxPacketTypeDef txPacket;
+
+    txPacket.header.StdId = id;                   // 标准报文ID
+    txPacket.header.ExtId = 0x00;                 // 扩展报文ID（一般不填）
+    txPacket.header.RTR = CAN_RTR_DATA;           // 发送数据帧
+    txPacket.header.IDE = CAN_ID_STD;             // 使用标准ID类型（11位）
+    txPacket.header.DLC = len;                    // 数据长度（0-8字节）
+    txPacket.header.TransmitGlobalTime = DISABLE; // 不发送时间戳
+
+    // 拷贝数据（保证8字节缓冲区内）
+    memset(txPacket.data, 0, sizeof(txPacket.data));
+    if (len > 8) len = 8;
+    memcpy(txPacket.data, data, len);
+
+    // 将要发送的报文放入 canTxQueue，由 CAN_TxTask 实际发送
+    if (canTxQueueHandle != NULL) {
+        osMessageQueuePut(canTxQueueHandle, &txPacket, 0, 0);
+    }
+}
+
+/* CAN Tx task: 从队列取出报文并调用 HAL 发送 */
+void CAN_TxTask(void *argument)
+{
+    CAN_TxPacketTypeDef txPacket;
     uint32_t TxMailbox;
 
-    TxHeader.StdId = id;                   // 标准报文ID
-    TxHeader.ExtId = 0x00;                 // 扩展报文ID（一般不填）
-    TxHeader.RTR = CAN_RTR_DATA;           // 发送数据帧
-    TxHeader.IDE = CAN_ID_STD;             // 使用标准ID类型（11位）
-    TxHeader.DLC = len;                    // 数据长度（0-8字节）
-    TxHeader.TransmitGlobalTime = DISABLE; // 不发送时间戳
-
-    // 请求发送消息并添加到发送邮箱
-    if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, data, &TxMailbox) != HAL_OK)
+    for(;;)
     {
-        // Error_Handler(); // 发送失败则进入死循环
+        while (osMessageQueueGet(canTxQueueHandle, &txPacket, NULL, osWaitForever) == osOK)
+        {
+            while (HAL_CAN_AddTxMessage(&hcan1, &txPacket.header, txPacket.data, &TxMailbox) != HAL_OK)
+            {
+                osDelay(1);
+            }
+        }
     }
 }
 

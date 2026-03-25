@@ -76,9 +76,32 @@
     <gazebo reference="imu_link">
         <sensor name="imu_sensor" type="imu">
             <always_on>1</always_on>
-            <update_rate>50</update_rate>
+            <update_rate>100</update_rate>
             <visualize>true</visualize>
             <topic>/imu</topic>
+        <imu>
+            <noise>
+                <!-- 角速度噪声 -->
+                <angular_velocity>
+                    <noise type="gaussian">
+                        <mean>0.0</mean>          <!-- 零均值白噪声 -->
+                        <stddev>0.0002</stddev>   <!-- 白噪声标准差 (rad/s) -->
+                        <bias_mean>0.0</bias_mean>      <!-- 偏置均值 -->
+                        <bias_stddev>0.0001</bias_stddev> <!-- 偏置随机游走标准差 (rad/s²) -->
+                    </noise>
+                </angular_velocity>
+
+                <!-- 线性加速度噪声 -->
+                <linear_acceleration>
+                    <noise type="gaussian">
+                        <mean>0.0</mean>          <!-- 零均值白噪声 -->
+                        <stddev>0.01</stddev>     <!-- 白噪声标准差 (m/s²) -->
+                        <bias_mean>0.0</bias_mean>      <!-- 偏置均值 -->
+                        <bias_stddev>0.001</bias_stddev> <!-- 偏置随机游走标准差 (m/s³) -->
+                    </noise>
+                </linear_acceleration>
+            </noise>
+        </imu>
         </sensor>
     </gazebo>
 
@@ -299,7 +322,7 @@
             <joint_name>steer_fl_joint</joint_name>
             <p_gain>15.0</p_gain>
             <i_gain>0.01</i_gain>
-            <d_gain>0.2</d_gain>
+            <d_gain>0.05</d_gain>
             <topic>/cmd_pos_fl</topic>
         </plugin>
         
@@ -307,13 +330,13 @@
             <joint_name>steer_fr_joint</joint_name>
             <p_gain>15.0</p_gain>
             <i_gain>0.01</i_gain>
-            <d_gain>0.2</d_gain>
+            <d_gain>0.05</d_gain>
             <topic>/cmd_pos_fr</topic>
         </plugin>
         
         <!-- Odometry Publisher (Provides Ground Truth position, velocity, heading) -->
         <plugin filename="libignition-gazebo-odometry-publisher-system.so" name="ignition::gazebo::systems::OdometryPublisher">
-            <odom_publish_frequency>50</odom_publish_frequency>
+            <odom_publish_frequency>100</odom_publish_frequency>
             <odom_topic>/model/simple_car/odometry</odom_topic>
             <odom_frame>odom</odom_frame>
             <robot_base_frame>dummy_root</robot_base_frame>
@@ -326,6 +349,7 @@
 
         <!-- Joint State Publisher (Encoders for rear wheels and suspensions) -->
         <plugin filename="libignition-gazebo-joint-state-publisher-system.so" name="ignition::gazebo::systems::JointStatePublisher">
+            <update_frequency>100</update_frequency>
             <topic>/model/simple_car/joint_states</topic>
             <joint_name>wheel_rl_joint</joint_name>
             <joint_name>wheel_rr_joint</joint_name>

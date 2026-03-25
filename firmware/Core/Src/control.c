@@ -8,7 +8,7 @@
 #endif
 
 // Parameters
-#define DT 0.01f
+#define DT 0.02f
 #define L 0.6f          // Wheelbase for Stanley
 #define W 0.68f         // Track width
 #define WHEEL_RADIUS 0.16f
@@ -260,6 +260,11 @@ void motion_control_algorithm(float *status, uint16_t *PWM_Value) {
     float voltage_l = calculate_voltage_pid(w_target_l, w_act_l, 0);
     float voltage_r = calculate_voltage_pid(w_target_r, w_act_r, 1);
     
+    if(isnan(voltage_l)||isinf(voltage_l)) voltage_l = 0.0f;
+    if(isnan(voltage_r)||isinf(voltage_r)) voltage_r = 0.0f;
+    if(isnan(delta_l)||isinf(delta_l)) delta_l = 0.0f;
+    if(isnan(delta_r)||isinf(delta_r)) delta_r = 0.0f;
+
     // 8. Output to PWM_Value
     // Map: [0]=>Volt_L_mV, [1]=>Volt_R_mV, [2]=>Steer_L_mrad, [3]=>Steer_R_mrad
     PWM_Value[0] = (uint16_t)(voltage_l * 1000.0f) + 0x8000;

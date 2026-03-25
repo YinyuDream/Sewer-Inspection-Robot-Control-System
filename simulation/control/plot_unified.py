@@ -3,11 +3,13 @@ import matplotlib.pyplot as plt
 import math
 from scipy.signal import butter, filtfilt
 import numpy as np
+from scipy.signal import savgol_filter
 
 plt.style.use("seaborn-whitegrid")
 
 
 def butter_lowpass_filter(data, cutoff, fs, order=2):
+    # return savgol_filter(data, window_length=51, polyorder=3, mode="interp")
     nyq = 0.5 * fs
     normal_cutoff = cutoff / nyq
     b, a = butter(order, normal_cutoff, btype="low", analog=False)
@@ -56,7 +58,7 @@ def plot_simulation_data(file_path):
     cutoff = 0.5
     order = 4
 
-    max_time = 106
+    max_time = 1000
     times = [t for t in times if t <= max_time]
     x = x[: len(times)]
     y = y[: len(times)]
@@ -77,7 +79,7 @@ def plot_simulation_data(file_path):
     wheel_speed_r_filtered = butter_lowpass_filter(wheel_speed_r, cutoff, fs, order)
     velocity_filtered = butter_lowpass_filter(velocity, cutoff, fs, order)
 
-    base_name = file_path.replace(".csv", "_unified")
+    base_name = file_path.replace(".csv", "_unified3")
 
     fig = plt.figure(figsize=(8, 6))
     plt.plot(x, y, "b-", linewidth=2)

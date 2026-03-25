@@ -52,6 +52,40 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
+/* CAN transmit queue */
+osMessageQueueId_t canTxQueueHandle;
+const osMessageQueueAttr_t canTxQueue_attributes = {
+  .name = "canTxQueue"
+};
+
+/* Simulated clock (microseconds). Updated from CAN ID 0x300 payload (uint32 little-endian). */
+volatile uint64_t simulated_time_us = 0;
+
+/* Accessors for simulated_time_us using FreeRTOS critical sections to avoid
+   dependence on libatomic (which isn't available for Cortex-M4 toolchain). */
+static inline uint64_t get_simulated_time_us(void)
+{
+  uint64_t v;
+  taskENTER_CRITICAL();
+  v = simulated_time_us;
+  taskEXIT_CRITICAL();
+  return v;
+}
+
+static inline void set_simulated_time_us(uint64_t v)
+{
+  taskENTER_CRITICAL();
+  simulated_time_us = v;
+  taskEXIT_CRITICAL();
+}
+
+/* CAN Tx task handle */
+osThreadId_t CanTxHandle;
+const osThreadAttr_t CanTx_attributes = {
+  .name = "CanTxTask",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 
 /* USER CODE END Variables */
 /* Definitions for Contorl */
@@ -105,14 +139,15 @@ const osMessageQueueAttr_t motionControl_attributes = {
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-
+void MonitorTask(void *argument);
+void CAN_TxTask(void *argument);
 /* USER CODE END FunctionPrototypes */
 
 void MotionControlTask(void *argument);
 void CanCommunicationTask(void *argument);
 void PowerHandleTask(void *argument);
 void NavigationEkfTask(void *argument);
-void MonitorTask(void *argument);
+
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -128,7 +163,7 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END Init */
 
   /* USER CODE BEGIN RTOS_MUTEX */
-  /* add mutexes, ... */
+  /* mutexes removed; using queue for CAN Tx */
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
@@ -141,18 +176,21 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the queue(s) */
   /* creation of canRxQueue */
-  canRxQueueHandle = osMessageQueueNew (16, sizeof(CAN_RxPacketTypeDef), &canRxQueue_attributes);
+  canRxQueueHandle = osMessageQueueNew (64, sizeof(CAN_RxPacketTypeDef), &canRxQueue_attributes);
 
   /* creation of powerManagementQueue */
-  powerManagementQueueHandle = osMessageQueueNew (16, sizeof(Robot_general), &powerManagementQueue_attributes);
+  powerManagementQueueHandle = osMessageQueueNew (32, sizeof(Robot_general), &powerManagementQueue_attributes);
 
   /* creation of sensorEkfData */
-  sensorEkfDataHandle = osMessageQueueNew (16, sizeof(Robot_general), &sensorEkfData_attributes);
+  sensorEkfDataHandle = osMessageQueueNew (32, sizeof(Robot_general), &sensorEkfData_attributes);
 
   /* creation of motionControl */
-  motionControlHandle = osMessageQueueNew (16, sizeof(Robot_general), &motionControl_attributes);
+  motionControlHandle = osMessageQueueNew (32, sizeof(Robot_general), &motionControl_attributes);
 
+  
   /* USER CODE BEGIN RTOS_QUEUES */
+  /* creation of canTxQueue */
+  canTxQueueHandle = osMessageQueueNew (32, sizeof(CAN_TxPacketTypeDef), &canTxQueue_attributes);
 
   /* USER CODE END RTOS_QUEUES */
 
@@ -169,7 +207,11 @@ void MX_FREERTOS_Init(void) {
   /* creation of EkfAlgorithm */
   EkfAlgorithmHandle = osThreadNew(NavigationEkfTask, NULL, &EkfAlgorithm_attributes);
 
+
   /* USER CODE BEGIN RTOS_THREADS */
+  /* creation of CAN Tx task */
+  CanTxHandle = osThreadNew(CAN_TxTask, NULL, &CanTx_attributes);
+
   /* creation of MonitorTask */
   const osThreadAttr_t MonitorTask_attributes = {
     .name = "MonitorTask",
@@ -200,47 +242,42 @@ void MotionControlTask(void *argument)
   Robot_general data;
   float status[20]; // 20个位姿真值输入
   uint16_t PWM_Value[4]; // 有4个电机的PWM控制输入
+  const uint32_t EXEC_PERIOD_US = 20 * 1000; // 执行周期 10ms => 10000us
+  uint64_t nextWakeTime_us = get_simulated_time_us(); // 下次唤醒时间（us）
+  uint64_t exec_tick_us = 0; // 算法执行耗时（us）
+
+  memset(status, 0, sizeof(status));
+
   /* Infinite loop */
   for(;;)
   {
-    
-    if (osMessageQueueGet(motionControlHandle, &data, NULL, osWaitForever) == osOK)
-    {
-        uint32_t start_tick = HAL_GetTick(); // 记录开始时间用于性能测试
-        char *runTimeStats = pvPortMalloc(1024); // 动态分配 1KB 避免撑爆任务原本的栈
-        
-        // 这里可以处理运动控制相关的 CAN 数据，例如 位置、速度、加速度等
-        // 将数据输入到运动控制算法中进行计算
-        status[data.id - 0x100] = data.FloatBytes.f; // 假设前两个字节是一个状态值，单位转换
-        motion_control_algorithm(status, PWM_Value); // 运动控制算法处理，输出 PWM 控制值
-        for (uint16_t i = 0; i < 4; i++) {
-          CAN_Send_Data(0x180 + i, (uint8_t *)&PWM_Value[i], 2); // 将控制结果通过 CAN 发送出去，ID 从 0x180 开始
-          osDelay(1); // 防止CAN邮箱溢满导致最后的数据包被丢弃
+    /* 在到达周期前持续清空队列更新状态（非阻塞），与其他任务一致 */
+    while (get_simulated_time_us() < nextWakeTime_us) {
+        while (osMessageQueueGet(motionControlHandle, &data, NULL, 0) == osOK) {
+            if (data.id >= 0x100 && data.id <= 0x1FF) {
+                status[data.id - 0x100] = data.FloatBytes.f;
+            }
         }
-        
-        uint32_t exec_tick = HAL_GetTick() - start_tick; // 计算算法单次执行耗时
-        data.FloatBytes.f = (float)exec_tick; // 将耗时转换为float发送
-        
-        osDelay(1); // 防止CAN邮箱溢满丢包
-        CAN_Send_Data(0x400, data.FloatBytes.bytes, 4); // ID 0x400 用于性能监控反馈
-
-        if (runTimeStats != NULL) {
-            memset(runTimeStats, 0, 1024);
-            vTaskGetRunTimeStats(runTimeStats);
-            
-            // 先发送 Header
-            char headerBuf[64];
-            int hLen = snprintf(headerBuf, sizeof(headerBuf), "MotionCtrl Runtime: %lu ms\r\n", (unsigned long)exec_tick);
-            CDC_Transmit_FS((uint8_t *)headerBuf, hLen);
-            
-            osDelay(2); // 延时等待 USB 硬件发完
-            
-            // 再发送统计体
-            CDC_Transmit_FS((uint8_t *)runTimeStats, strlen(runTimeStats));
-            
-            vPortFree(runTimeStats); // 用完释放
-        }
+        osDelay(1);
     }
+
+    /* 到达周期，更新时间并执行控制 */
+    nextWakeTime_us += EXEC_PERIOD_US;
+
+    uint64_t start_tick_us = get_simulated_time_us();
+
+    // 执行运动控制算法
+    motion_control_algorithm(status, PWM_Value); // 运动控制算法处理，输出 PWM 控制值
+
+    // 发送控制结果
+    for (uint16_t i = 0; i < 4; i++) {
+      CAN_Send_Data(0x180 + i, (uint8_t *)&PWM_Value[i], 2);
+    }
+
+    // 计算算法单次执行耗时（us）并发送
+    exec_tick_us = get_simulated_time_us() - start_tick_us;
+    data.FloatBytes.f = (float)exec_tick_us;
+    CAN_Send_Data(0x400, data.FloatBytes.bytes, 4);
   }
   /* USER CODE END MotionControlTask */
 }
@@ -266,17 +303,25 @@ void CanCommunicationTask(void *argument)
     {
         // 收到 CAN 数据了！
         // 在这里进行业务逻辑处理，例如解析协议、控制电机等
-
-        // 【示例逻辑】将收到的 CAN ID 和前 4 个字节数据通过 USB 打印出来调试
-        // 注意：在多任务中并发调用 CDC_Transmit_FS 可能需要互斥锁，这里仅作演示
-        /* int len = sprintf((char *)msg_buffer, "CAN Rx: ID=0x%lX, D0=%02X, D1=%02X\r\n", 
-                          (unsigned long)rxPacket.header.StdId, rxPacket.data[0], rxPacket.data[1]);
-        CDC_Transmit_FS(msg_buffer, len);*/
-        
         
         data.id = rxPacket.header.StdId;
         for(int i = 0; i < 4 && i < rxPacket.header.DLC; i++) {
-            data.FloatBytes.bytes[i] = rxPacket.data[i];
+          data.FloatBytes.bytes[i] = rxPacket.data[i];
+        }
+
+        /* 如果收到仿真时钟包 (CAN ID 0x300, DLC>=4)，解析为 uint32_t 小端，单位 = 1us */
+        if (rxPacket.header.StdId == 0x300 && rxPacket.header.DLC >= 4) {
+          uint64_t ts = ((uint64_t)rxPacket.data[0])
+                | ((uint64_t)rxPacket.data[1] << 8)
+                | ((uint64_t)rxPacket.data[2] << 16)
+                | ((uint64_t)rxPacket.data[3] << 24)
+                | ((uint64_t)rxPacket.data[4] << 32)
+                | ((uint64_t)rxPacket.data[5] << 40)
+                | ((uint64_t)rxPacket.data[6] << 48)
+                | ((uint64_t)rxPacket.data[7] << 56);
+                
+          /* 原始是 uint32（微秒），保存到 64bit 仿真时钟中（原子操作以防竞态） */
+          set_simulated_time_us((uint64_t)ts);
         }
 
         if (rxPacket.header.StdId >= 0x000 && rxPacket.header.StdId <= 0x0FF) {
@@ -313,15 +358,38 @@ void PowerHandleTask(void *argument)
   Robot_general data;
   float power_status[10]; // 假设有10个电源相关的状态数据
   float instruction[10]; // 假设有10个电源控制指令输入
+  const uint32_t EXEC_PERIOD_US = 100 * 1000; // 执行周期 100ms => 100000us
+  uint64_t nextWakeTime_us = get_simulated_time_us(); // 下次唤醒时间（us）
+
   for(;;)
   {
-    if (osMessageQueueGet(powerManagementQueueHandle, &data, NULL, osWaitForever) == osOK)
+    // 非阻塞方式检查队列，让任务可以周期性执行
+    while (osMessageQueueGet(powerManagementQueueHandle, &data, NULL, 10) == osOK)
     {
-        power_status[data.id] = data.FloatBytes.f;
-        // 这里可以处理电源管理相关的 CAN 数据，例如监测电池电压、控制电源开关等
-        power_management_logic(power_status, instruction); // 伪函数，代表电源管理的业务逻辑处理
+        // 接收到数据立即更新（注意：这里假设 data.id 在 0-9 范围内）
+        if (data.id < 10) {
+            power_status[data.id] = data.FloatBytes.f;
+        }
+    }
+
+    /* 等待仿真时钟到下一个唤醒点 */
+    while (get_simulated_time_us() < nextWakeTime_us) {
+      osDelay(1);
+    }
+
+    /* 检查是否到达执行时间（由仿真时钟控制） */
+    if (get_simulated_time_us() >= nextWakeTime_us)
+    {
+        // 更新下次唤醒时间
+        nextWakeTime_us += EXEC_PERIOD_US;
+
+        // 执行电源管理业务逻辑
+        power_management_logic(power_status, instruction);
+
+        // 发送 CAN 数据 (示例：注释掉实际发送)
         for (uint16_t i = 0; i < 10; i++) {
-          CAN_Send_Data(0x080 + i, (uint8_t *)&power_status[i], 4);
+          // CAN_Send_Data(0x080 + i, (uint8_t *)&power_status[i], 4);
+          // osDelay(1);
         }
     }
   }
@@ -342,16 +410,37 @@ void NavigationEkfTask(void *argument)
   Robot_general data;
   float sensor_data[10]; // 假设有10个传感器数据输入到 EKF 中，例如 IMU 的加速度、角速度，里程计的速度等
   float result[10]; // 假设 EKF 输出也是 10 个状态变量
+  const uint32_t EXEC_PERIOD_US = 10 * 1000; // 执行周期 10ms => 10000us
+  uint64_t nextWakeTime_us = get_simulated_time_us(); // 下次唤醒时间（us）
+
   for(;;)
   {
-    if (osMessageQueueGet(sensorEkfDataHandle, &data, NULL, osWaitForever) == osOK)
+    // 非阻塞方式检查队列，接收数据立即更新
+    while (osMessageQueueGet(sensorEkfDataHandle, &data, NULL, 10) == osOK)
     {
-        // 这里可以处理传感器数据融合相关的 CAN 数据，例如 IMU、里程计等
-        // 将数据输入到 EKF 算法中进行状态估计
-        sensor_data[data.id - 0x200] = data.FloatBytes.f; // 假设前两个字节是一个传感器值，单位转换
+        // 接收到数据立即更新（注意：这里假设 data.id 在 0x200-0x2FF 范围内）
+        if (data.id >= 0x200 && data.id <= 0x2FF) {
+            sensor_data[data.id - 0x200] = data.FloatBytes.f; // 假设前两个字节是一个传感器值，单位转换
+        }
+    }
+
+    /* 等待仿真时钟到下一个唤醒点 */
+    while (get_simulated_time_us() < nextWakeTime_us) {
+      osDelay(1);
+    }
+
+    if (get_simulated_time_us() >= nextWakeTime_us)
+    {
+        // 更新下次唤醒时间
+        nextWakeTime_us += EXEC_PERIOD_US;
+
+        // 执行 EKF 算法更新
         ekf_algorithm_update(sensor_data, result); // 伪函数，代表 EKF 算法的更新步骤
+        
+        // 发送 EKF 结果
         for (uint16_t i = 0; i < 10; i++) {
-          CAN_Send_Data(0x280 + i, (uint8_t *)&result[i], 4); // 将 EKF 结果通过 CAN 发送出去，ID 从 0x300 开始
+          // CAN_Send_Data(0x280 + i, (uint8_t *)&result[i], 4); // 将 EKF 结果通过 CAN 发送出去，ID 从 0x300 开始
+          // osDelay(1);
         }
     }
   }
@@ -369,10 +458,14 @@ void MonitorTask(void *argument)
   Robot_general data;
   data.id = 0x500; // 专属监控基准ID，后续+1区分不同任务
 
+  uint64_t nextMonitorTime_us = get_simulated_time_us() + 2000ULL * 1000ULL; // 2s => 2,000,000 us
+
   for(;;)
   {
-    // 等待 2 秒发送一次
-    osDelay(2000);
+    /* 等待仿真时钟到下一个监控发送点 */
+    while (get_simulated_time_us() < nextMonitorTime_us) {
+      osDelay(1);
+    }
 
     // 1. 发送 MotionControlTask (ContorlHandle) 的高水位 [ID: 0x500]
     data.FloatBytes.f = (float)uxTaskGetStackHighWaterMark(ContorlHandle);
@@ -390,7 +483,19 @@ void MonitorTask(void *argument)
     data.FloatBytes.f = (float)uxTaskGetStackHighWaterMark(PowerManagementHandle);
     CAN_Send_Data(0x503, data.FloatBytes.bytes, 4);
     
-    // (如果开启了 vTaskGetRunTimeStats)，还可以用同样的方式发CPU占用率，在此为了兼容未开启宏的情况，仅展示栈空间。
+    /* 如果需要，收集并通过 USB 发送运行时统计信息（来自 motion control 的最近执行耗时） */
+    char *runTimeStats = pvPortMalloc(1024); // 动态分配 1KB
+    if (runTimeStats != NULL) {
+        memset(runTimeStats, 0, 1024);
+        vTaskGetRunTimeStats(runTimeStats);
+
+        /* 仅发送统计体（不包含 MotionControl 精确耗时） */
+        CDC_Transmit_FS((uint8_t *)runTimeStats, strlen(runTimeStats));
+
+        vPortFree(runTimeStats);
+    }
+
+    nextMonitorTime_us += 2000ULL * 1000ULL;
   }
 }
 /* USER CODE END Application */

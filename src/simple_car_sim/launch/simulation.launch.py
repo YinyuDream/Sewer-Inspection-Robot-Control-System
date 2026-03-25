@@ -67,7 +67,8 @@ def generate_launch_description():
             #('/model/simple_car/joint/wheel_rl_joint/cmd_vel', '/cmd_vel_rl'),
             #('/model/simple_car/joint/wheel_rr_joint/cmd_vel', '/cmd_vel_rr'),
             ('/model/simple_car/odometry', '/odom'),
-            ('/model/simple_car/joint_states', '/joint_states'),
+            #('/model/simple_car/joint_states', '/joint_states'),
+            ('/model/simple_car/joint_states', '/joint_states_raw'),
         ],
         output='screen'
     )
@@ -81,10 +82,24 @@ def generate_launch_description():
         output='screen'
     )
 
+    throttle_node = Node(
+        package='topic_tools',
+        executable='throttle',
+        arguments=[
+            'messages',           # 模式3
+            '/joint_states_raw',  # 输入话题 (高频)
+            '100.0',               # 目标频率 (Hz)
+            '/joint_states'       # 输出话题 (低频)
+        ],
+        parameters=[{'use_sim_time': True}],  # <--- 必须加上这一句！
+        output='screen'
+    )
+
     return LaunchDescription([
         gazebo,
         spawn_entity,
         robot_state_publisher,
         bridge,
-        rviz
+        rviz,
+        throttle_node
     ])

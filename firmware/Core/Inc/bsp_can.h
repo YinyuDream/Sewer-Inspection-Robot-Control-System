@@ -4,6 +4,7 @@
 #include "main.h"
 #include "can.h"
 #include "cmsis_os.h"
+#include "FreeRTOS.h"
 
 // 1. 定义一个打包 CAN 接收数据的结构体，用于 FreeRTOS 队列传递
 typedef struct {
@@ -23,6 +24,14 @@ typedef struct {
 extern osMessageQueueId_t canRxQueueHandle;
 extern osMessageQueueId_t powerManagementQueueHandle;
 extern osMessageQueueId_t sensorEkfDataHandle;
+
+/* CAN transmit queue (created in freertos.c) */
+typedef struct {
+    CAN_TxHeaderTypeDef header;
+    uint8_t data[8];
+} CAN_TxPacketTypeDef;
+
+extern osMessageQueueId_t canTxQueueHandle;
 
 // 函数声明
 void CAN_Filter_Config(void);
