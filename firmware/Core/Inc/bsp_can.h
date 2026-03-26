@@ -14,8 +14,8 @@ typedef struct {
 
 typedef struct {
     union {
-        float f;
-        uint8_t bytes[4];
+        float f[2];
+        uint8_t bytes[8];
     } FloatBytes;
     uint32_t id;
 } Robot_general;

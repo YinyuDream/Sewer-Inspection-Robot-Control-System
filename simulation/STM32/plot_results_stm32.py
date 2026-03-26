@@ -1,11 +1,12 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-
+import os
 # 1. 读取 CSV 数据
 # 这里假设 csv 文件和 python 脚本在同一级目录
+path = os.path.dirname(os.path.abspath(__file__))
 csv_file = 'hil_stress_results.csv' 
-data = pd.read_csv(csv_file)
+data = pd.read_csv(os.path.join(path, csv_file))
 
 # --- 修复：按时间排序，防止绘制折线图时出现乱线回折 ---
 data = data.sort_values('timestamp_s').reset_index(drop=True)
@@ -47,5 +48,5 @@ ax.grid(True, linestyle='--', alpha=0.5)
 ax.legend(loc='upper right', frameon=True, shadow=True)
 
 plt.tight_layout()
-plt.savefig('hil_stress_plot.png')
+plt.savefig(path + '/hil_stress_plot.png')
 print("✅ 图片已成功生成: hil_stress_plot.png")

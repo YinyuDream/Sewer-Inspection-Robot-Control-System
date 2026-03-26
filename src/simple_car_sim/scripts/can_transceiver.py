@@ -36,7 +36,7 @@ class CanTransceiver(Node):
             Frame,
             '/from_can_bus',
             self.can_rx_callback,
-            10,
+            100,
             callback_group=self._rx_cb_group)
         
         # 创建一个发布者，发布转化后的 ROS 话题
@@ -95,6 +95,7 @@ class CanTransceiver(Node):
         if can_id == 0x180:
             values = list(struct.unpack('<HHHH', bytes(data[:8])))
             values = [(v - 0x8000) / 1000.0 for v in values] # Convert back to float with offset
+            #self.get_logger().info(f"Decoded CAN 0x180 - Volts L: {values[0]:.3f}, Volts R: {values[1]:.3f}, Steer L: {values[2]:.3f}, Steer R: {values[3]:.3f}")
             self.pub_cmd_volts_l.publish(Float64(data=values[0]))
             self.pub_cmd_volts_r.publish(Float64(data=values[1]))
             self.pub_cmd_steer_l.publish(Float64(data=values[2]))
@@ -160,6 +161,7 @@ class CanTransceiver(Node):
 
     def publish_sim_data(self):
         """Publish the current simulation time (seconds as float) on CAN ID 0x300."""
+        # print("Publishing sim data")
         try:
             # dt 在函数开头、发送任何帧之前计算，准确反映两次 odom 回调的真实间隔
             now = self.get_clock().now()
@@ -172,13 +174,16 @@ class CanTransceiver(Node):
             self.send_can_2_float(0x100, self.pos['x'], self.pos['y'])
             self.send_can_2_float(0x101, self.pos['z'], self.ori['x'])
             self.send_can_2_float(0x102, self.ori['y'], self.ori['z'])
+            #micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
             self.send_can_2_float(0x103, self.ori['w'], self.vel_lin['x'])
             self.send_can_2_float(0x104, self.vel_lin['y'], self.vel_lin['z'])
             self.send_can_2_float(0x105, self.vel_ang['x'], self.vel_ang['y'])
+            #micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
             self.send_can_2_float(0x106, self.vel_ang['z'], 0.0)
             self.send_can_2_float(0x107, self.wheel_speed['rl'], self.wheel_speed['rr'])
 
             self.send_can_2_float(0x200, self.imu_acc_lin['x'], self.imu_acc_lin['y'])
+            #micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
             self.send_can_2_float(0x201, self.imu_acc_lin['z'], self.imu_vel_ang['x'])
             self.send_can_2_float(0x202, self.imu_vel_ang['y'], self.imu_vel_ang['z'])
 

@@ -488,6 +488,8 @@ class CarController(Node):
             self._diag_count = 0
         self._diag_count += 1
         if self._diag_count % 100 == 0:
+            pass
+            '''
             import math
             self.get_logger().info(
                 f"[AC_DIAG] pos=({self.pos_x:.3f},{self.pos_y:.3f}) "
@@ -496,7 +498,7 @@ class CarController(Node):
                 f"torque=({torque_l_cmd:.3f},{torque_r_cmd:.3f}) "
                 f"wheel_spd=({self.wheel_rl_speed:.3f},{self.wheel_rr_speed:.3f})"
             )
-
+            '''
         self.pub_rl.publish(Float64(data=torque_l_cmd))
         self.pub_rr.publish(Float64(data=torque_r_cmd))
 

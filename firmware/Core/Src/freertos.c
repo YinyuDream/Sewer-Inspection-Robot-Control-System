@@ -33,6 +33,7 @@
 #include "power_management.h" // 引入电源管理业务逻辑层
 #include "ekf.h" // 引入 EKF 算法接口
 #include "control.h" // 引入运动控制算法接口
+#include "FreeRTOSConfig.h" // 用于 SystemCoreClock 和 portGET_RUN_TIME_COUNTER_VALUE
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -58,26 +59,7 @@ const osMessageQueueAttr_t canTxQueue_attributes = {
   .name = "canTxQueue"
 };
 
-/* Simulated clock (microseconds). Updated from CAN ID 0x300 payload (uint32 little-endian). */
-volatile uint64_t simulated_time_us = 0;
 
-/* Accessors for simulated_time_us using FreeRTOS critical sections to avoid
-   dependence on libatomic (which isn't available for Cortex-M4 toolchain). */
-static inline uint64_t get_simulated_time_us(void)
-{
-  uint64_t v;
-  taskENTER_CRITICAL();
-  v = simulated_time_us;
-  taskEXIT_CRITICAL();
-  return v;
-}
-
-static inline void set_simulated_time_us(uint64_t v)
-{
-  taskENTER_CRITICAL();
-  simulated_time_us = v;
-  taskEXIT_CRITICAL();
-}
 
 /* CAN Tx task handle */
 osThreadId_t CanTxHandle;
@@ -141,6 +123,12 @@ const osMessageQueueAttr_t motionControl_attributes = {
 /* USER CODE BEGIN FunctionPrototypes */
 void MonitorTask(void *argument);
 void CAN_TxTask(void *argument);
+static inline uint64_t get_hardware_time_us(void) {
+    /* Use DWT cycle counter for microsecond resolution */
+    uint32_t cycles = portGET_RUN_TIME_COUNTER_VALUE(); /* 32-bit counter, overflows every ~25.5s at 168MHz */
+    /* Convert cycles to microseconds: cycles * 1,000,000 / SystemCoreClock */
+    return (uint64_t)cycles * 1000000ULL / SystemCoreClock;
+}
 /* USER CODE END FunctionPrototypes */
 
 void MotionControlTask(void *argument);
@@ -159,7 +147,7 @@ void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
-
+  MX_USB_DEVICE_Init();
   /* USER CODE END Init */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -236,14 +224,11 @@ void MX_FREERTOS_Init(void) {
 /* USER CODE END Header_MotionControlTask */
 void MotionControlTask(void *argument)
 {
-  /* init code for USB_DEVICE */
-  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN MotionControlTask */
   Robot_general data;
   float status[20]; // 20个位姿真值输入
   uint16_t PWM_Value[4]; // 有4个电机的PWM控制输入
   const uint32_t EXEC_PERIOD_US = 20 * 1000; // 执行周期 10ms => 10000us
-  uint64_t nextWakeTime_us = get_simulated_time_us(); // 下次唤醒时间（us）
   uint64_t exec_tick_us = 0; // 算法执行耗时（us）
 
   memset(status, 0, sizeof(status));
@@ -251,33 +236,42 @@ void MotionControlTask(void *argument)
   /* Infinite loop */
   for(;;)
   {
-    /* 在到达周期前持续清空队列更新状态（非阻塞），与其他任务一致 */
-    while (get_simulated_time_us() < nextWakeTime_us) {
-        while (osMessageQueueGet(motionControlHandle, &data, NULL, 0) == osOK) {
-            if (data.id >= 0x100 && data.id <= 0x1FF) {
-                status[data.id - 0x100] = data.FloatBytes.f;
+    // 等待控制触发标志（由 CAN 接收线程在收到 0x300 时设置）
+    osThreadFlagsWait(0x01, osFlagsWaitAny, osWaitForever);
+    uint32_t cnt = 0;
+    // 清空队列更新状态
+    while (osMessageQueueGet(motionControlHandle, &data, NULL, 0) == osOK) {
+        if (data.id >= 0x100 && data.id <= 0x107) {
+            cnt++;
+            int base_idx = (data.id - 0x100) * 2;
+            if (base_idx < 20) {
+                status[base_idx] = data.FloatBytes.f[0];
+            }
+            if (base_idx + 1 < 20) {
+                status[base_idx + 1] = data.FloatBytes.f[1];
             }
         }
-        osDelay(1);
+        else if (data.id == 0x300) {
+            cnt++;
+            // 0x300 包含 dt 和 0.0
+            status[16] = data.FloatBytes.f[0]; // dt
+            status[17] = data.FloatBytes.f[1]; // reserved
+        }
     }
 
-    /* 到达周期，更新时间并执行控制 */
-    nextWakeTime_us += EXEC_PERIOD_US;
-
-    uint64_t start_tick_us = get_simulated_time_us();
+    uint64_t start_tick_us = get_hardware_time_us();
 
     // 执行运动控制算法
     motion_control_algorithm(status, PWM_Value); // 运动控制算法处理，输出 PWM 控制值
 
-    // 发送控制结果
-    for (uint16_t i = 0; i < 4; i++) {
-      CAN_Send_Data(0x180 + i, (uint8_t *)&PWM_Value[i], 2);
-    }
+    // 发送控制结果：ID 0x180 包含4个uint16 (8字节)
+    CAN_Send_Data(0x180, (uint8_t *)PWM_Value, 8);
 
-    // 计算算法单次执行耗时（us）并发送
-    exec_tick_us = get_simulated_time_us() - start_tick_us;
-    data.FloatBytes.f = (float)exec_tick_us;
+    // 计算算法单次执行耗时（ms）并发送
+    exec_tick_us = get_hardware_time_us() - start_tick_us;
+    data.FloatBytes.f[0] = (float)exec_tick_us / 1000.0f;  // 转换为毫秒
     CAN_Send_Data(0x400, data.FloatBytes.bytes, 4);
+    CAN_Send_Data(0x301,(uint8_t*)&cnt,4);
   }
   /* USER CODE END MotionControlTask */
 }
@@ -305,23 +299,22 @@ void CanCommunicationTask(void *argument)
         // 在这里进行业务逻辑处理，例如解析协议、控制电机等
         
         data.id = rxPacket.header.StdId;
-        for(int i = 0; i < 4 && i < rxPacket.header.DLC; i++) {
+        // Copy up to 8 bytes (two floats)
+        for(int i = 0; i < 8 && i < rxPacket.header.DLC; i++) {
           data.FloatBytes.bytes[i] = rxPacket.data[i];
         }
 
-        /* 如果收到仿真时钟包 (CAN ID 0x300, DLC>=4)，解析为 uint32_t 小端，单位 = 1us */
-        if (rxPacket.header.StdId == 0x300 && rxPacket.header.DLC >= 4) {
-          uint64_t ts = ((uint64_t)rxPacket.data[0])
-                | ((uint64_t)rxPacket.data[1] << 8)
-                | ((uint64_t)rxPacket.data[2] << 16)
-                | ((uint64_t)rxPacket.data[3] << 24)
-                | ((uint64_t)rxPacket.data[4] << 32)
-                | ((uint64_t)rxPacket.data[5] << 40)
-                | ((uint64_t)rxPacket.data[6] << 48)
-                | ((uint64_t)rxPacket.data[7] << 56);
-                
-          /* 原始是 uint32（微秒），保存到 64bit 仿真时钟中（原子操作以防竞态） */
-          set_simulated_time_us((uint64_t)ts);
+        /* 如果收到仿真时钟包 (CAN ID 0x300, DLC>=4)，解析为两个float：dt和0.0 */
+        if (rxPacket.header.StdId == 0x300 && rxPacket.header.DLC >= 8) {
+          // 解析为两个float：dt（秒）和0.0
+          float dt_seconds;
+          float dummy;
+          memcpy(&dt_seconds, &rxPacket.data[0], 4);
+          memcpy(&dummy, &rxPacket.data[4], 4);
+          osMessageQueuePut(motionControlHandle, &data, 0, 0); // 将 dt 包含在 motion control 的队列中
+          // 触发运动控制任务和EKF任务
+          osThreadFlagsSet(ContorlHandle, 0x01);
+          osThreadFlagsSet(EkfAlgorithmHandle, 0x02);
         }
 
         if (rxPacket.header.StdId >= 0x000 && rxPacket.header.StdId <= 0x0FF) {
@@ -358,39 +351,30 @@ void PowerHandleTask(void *argument)
   Robot_general data;
   float power_status[10]; // 假设有10个电源相关的状态数据
   float instruction[10]; // 假设有10个电源控制指令输入
-  const uint32_t EXEC_PERIOD_US = 100 * 1000; // 执行周期 100ms => 100000us
-  uint64_t nextWakeTime_us = get_simulated_time_us(); // 下次唤醒时间（us）
+  const TickType_t xFrequency = pdMS_TO_TICKS(100); // 10Hz = 100ms周期
+  TickType_t xLastWakeTime = xTaskGetTickCount();
 
   for(;;)
   {
-    // 非阻塞方式检查队列，让任务可以周期性执行
-    while (osMessageQueueGet(powerManagementQueueHandle, &data, NULL, 10) == osOK)
+    // 等待下一个周期
+    vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    
+    // 非阻塞方式检查队列，更新数据
+    while (osMessageQueueGet(powerManagementQueueHandle, &data, NULL, 0) == osOK)
     {
         // 接收到数据立即更新（注意：这里假设 data.id 在 0-9 范围内）
         if (data.id < 10) {
-            power_status[data.id] = data.FloatBytes.f;
+            power_status[data.id - 0x000] = data.FloatBytes.f[0];
         }
     }
 
-    /* 等待仿真时钟到下一个唤醒点 */
-    while (get_simulated_time_us() < nextWakeTime_us) {
-      osDelay(1);
-    }
+    // 执行电源管理业务逻辑
+    power_management_logic(power_status, instruction);
 
-    /* 检查是否到达执行时间（由仿真时钟控制） */
-    if (get_simulated_time_us() >= nextWakeTime_us)
-    {
-        // 更新下次唤醒时间
-        nextWakeTime_us += EXEC_PERIOD_US;
-
-        // 执行电源管理业务逻辑
-        power_management_logic(power_status, instruction);
-
-        // 发送 CAN 数据 (示例：注释掉实际发送)
-        for (uint16_t i = 0; i < 10; i++) {
-          // CAN_Send_Data(0x080 + i, (uint8_t *)&power_status[i], 4);
-          // osDelay(1);
-        }
+    // 发送 CAN 数据 (示例：注释掉实际发送)
+    for (uint16_t i = 0; i < 10; i++) {
+      // CAN_Send_Data(0x080 + i, (uint8_t *)&power_status[i], 4);
+      // osDelay(1);
     }
   }
   /* USER CODE END PowerHandleTask */
@@ -410,38 +394,35 @@ void NavigationEkfTask(void *argument)
   Robot_general data;
   float sensor_data[10]; // 假设有10个传感器数据输入到 EKF 中，例如 IMU 的加速度、角速度，里程计的速度等
   float result[10]; // 假设 EKF 输出也是 10 个状态变量
-  const uint32_t EXEC_PERIOD_US = 10 * 1000; // 执行周期 10ms => 10000us
-  uint64_t nextWakeTime_us = get_simulated_time_us(); // 下次唤醒时间（us）
 
   for(;;)
   {
-    // 非阻塞方式检查队列，接收数据立即更新
-    while (osMessageQueueGet(sensorEkfDataHandle, &data, NULL, 10) == osOK)
+    // 等待 EKF 触发标志（由 CAN 接收线程在收到 0x300 时设置）
+    osThreadFlagsWait(0x02, osFlagsWaitAny, osWaitForever);
+    
+    // 清空队列更新传感器数据
+    while (osMessageQueueGet(sensorEkfDataHandle, &data, NULL, 0) == osOK)
     {
         // 接收到数据立即更新（注意：这里假设 data.id 在 0x200-0x2FF 范围内）
         if (data.id >= 0x200 && data.id <= 0x2FF) {
-            sensor_data[data.id - 0x200] = data.FloatBytes.f; // 假设前两个字节是一个传感器值，单位转换
+            // 每个 CAN ID 包含两个 float，存储到连续位置
+            int base_idx = (data.id - 0x200) * 2;
+            if (base_idx < 10) {
+                sensor_data[base_idx] = data.FloatBytes.f[0];
+            }
+            if (base_idx + 1 < 10) {
+                sensor_data[base_idx + 1] = data.FloatBytes.f[1];
+            }
         }
     }
 
-    /* 等待仿真时钟到下一个唤醒点 */
-    while (get_simulated_time_us() < nextWakeTime_us) {
-      osDelay(1);
-    }
-
-    if (get_simulated_time_us() >= nextWakeTime_us)
-    {
-        // 更新下次唤醒时间
-        nextWakeTime_us += EXEC_PERIOD_US;
-
-        // 执行 EKF 算法更新
-        ekf_algorithm_update(sensor_data, result); // 伪函数，代表 EKF 算法的更新步骤
-        
-        // 发送 EKF 结果
-        for (uint16_t i = 0; i < 10; i++) {
-          // CAN_Send_Data(0x280 + i, (uint8_t *)&result[i], 4); // 将 EKF 结果通过 CAN 发送出去，ID 从 0x300 开始
-          // osDelay(1);
-        }
+    // 执行 EKF 算法更新
+    ekf_algorithm_update(sensor_data, result); // 伪函数，代表 EKF 算法的更新步骤
+    
+    // 发送 EKF 结果
+    for (uint16_t i = 0; i < 10; i++) {
+      // CAN_Send_Data(0x280 + i, (uint8_t *)&result[i], 4); // 将 EKF 结果通过 CAN 发送出去，ID 从 0x300 开始
+      // osDelay(1);
     }
   }
   /* USER CODE END NavigationEkfTask */
@@ -458,29 +439,29 @@ void MonitorTask(void *argument)
   Robot_general data;
   data.id = 0x500; // 专属监控基准ID，后续+1区分不同任务
 
-  uint64_t nextMonitorTime_us = get_simulated_time_us() + 2000ULL * 1000ULL; // 2s => 2,000,000 us
-
   for(;;)
   {
-    /* 等待仿真时钟到下一个监控发送点 */
-    while (get_simulated_time_us() < nextMonitorTime_us) {
-      osDelay(1);
-    }
+    /* 每2秒发送一次堆栈水位监控数据 */
+    osDelay(2000);
 
     // 1. 发送 MotionControlTask (ContorlHandle) 的高水位 [ID: 0x500]
-    data.FloatBytes.f = (float)uxTaskGetStackHighWaterMark(ContorlHandle);
+    data.FloatBytes.f[0] = (float)uxTaskGetStackHighWaterMark(ContorlHandle);
+    data.FloatBytes.f[1] = 0.0f;
     CAN_Send_Data(0x500, data.FloatBytes.bytes, 4);
 
     // 2. 发送 CanDataCenterTask 的高水位 [ID: 0x501]
-    data.FloatBytes.f = (float)uxTaskGetStackHighWaterMark(CanDataCenterHandle);
+    data.FloatBytes.f[0] = (float)uxTaskGetStackHighWaterMark(CanDataCenterHandle);
+    data.FloatBytes.f[1] = 0.0f;
     CAN_Send_Data(0x501, data.FloatBytes.bytes, 4);
 
     // 3. 发送 EkfAlgorithmTask 的高水位 [ID: 0x502]
-    data.FloatBytes.f = (float)uxTaskGetStackHighWaterMark(EkfAlgorithmHandle);
+    data.FloatBytes.f[0] = (float)uxTaskGetStackHighWaterMark(EkfAlgorithmHandle);
+    data.FloatBytes.f[1] = 0.0f;
     CAN_Send_Data(0x502, data.FloatBytes.bytes, 4);
 
     // 4. 发送 PowerManagementTask 的高水位 [ID: 0x503]
-    data.FloatBytes.f = (float)uxTaskGetStackHighWaterMark(PowerManagementHandle);
+    data.FloatBytes.f[0] = (float)uxTaskGetStackHighWaterMark(PowerManagementHandle);
+    data.FloatBytes.f[1] = 0.0f;
     CAN_Send_Data(0x503, data.FloatBytes.bytes, 4);
     
     /* 如果需要，收集并通过 USB 发送运行时统计信息（来自 motion control 的最近执行耗时） */
@@ -494,8 +475,6 @@ void MonitorTask(void *argument)
 
         vPortFree(runTimeStats);
     }
-
-    nextMonitorTime_us += 2000ULL * 1000ULL;
   }
 }
 /* USER CODE END Application */

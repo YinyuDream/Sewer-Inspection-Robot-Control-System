@@ -67,8 +67,8 @@ def generate_launch_description():
             #('/model/simple_car/joint/wheel_rl_joint/cmd_vel', '/cmd_vel_rl'),
             #('/model/simple_car/joint/wheel_rr_joint/cmd_vel', '/cmd_vel_rr'),
             ('/model/simple_car/odometry', '/odom'),
-            #('/model/simple_car/joint_states', '/joint_states'),
-            ('/model/simple_car/joint_states', '/joint_states_raw'),
+            ('/model/simple_car/joint_states', '/joint_states'),
+            #('/model/simple_car/joint_states', '/joint_states_raw'),
         ],
         output='screen'
     )
@@ -101,5 +101,5 @@ def generate_launch_description():
         robot_state_publisher,
         bridge,
         rviz,
-        throttle_node
+        #throttle_node
     ])

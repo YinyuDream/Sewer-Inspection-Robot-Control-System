@@ -5,7 +5,9 @@ from scipy.signal import butter, filtfilt
 import numpy as np
 from scipy.signal import savgol_filter
 
-plt.style.use("seaborn-whitegrid")
+print(plt.style.available)
+
+plt.style.use("seaborn-v0_8-whitegrid")
 
 
 def butter_lowpass_filter(data, cutoff, fs, order=2):
@@ -79,7 +81,7 @@ def plot_simulation_data(file_path):
     wheel_speed_r_filtered = butter_lowpass_filter(wheel_speed_r, cutoff, fs, order)
     velocity_filtered = butter_lowpass_filter(velocity, cutoff, fs, order)
 
-    base_name = file_path.replace(".csv", "_unified3")
+    base_name = file_path.replace(".csv", "_unified")
 
     fig = plt.figure(figsize=(8, 6))
     plt.plot(x, y, "b-", linewidth=2)
@@ -311,4 +313,6 @@ def plot_simulation_data(file_path):
 
 if __name__ == "__main__":
     file_path = "/home/yinyudream/robot/simulation/control/simulation_data.csv"
+    plot_simulation_data(file_path)
+    file_path = "/home/yinyudream/robot/simulation/control/simulation_can_data.csv"
     plot_simulation_data(file_path)

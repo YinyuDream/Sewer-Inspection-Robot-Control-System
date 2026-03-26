@@ -8,7 +8,7 @@
 #endif
 
 // Parameters
-#define DT 0.02f
+#define DT 0.01f
 #define L 0.6f          // Wheelbase for Stanley
 #define W 0.68f         // Track width
 #define WHEEL_RADIUS 0.16f
@@ -183,8 +183,8 @@ void motion_control_algorithm(float *status, uint16_t *PWM_Value) {
     float v_linear = sqrtf(vx * vx + vy * vy + vz * vz);
 
     float roll_rate = status[10]; // Angular Velocity X
-    float w_act_l = status[16];   // Actual Wheel Speed L (rad/s)
-    float w_act_r = status[17];   // Actual Wheel Speed R (rad/s)
+    float w_act_l = status[14];   // Actual Wheel Speed L (rad/s) - from 0x107
+    float w_act_r = status[15];   // Actual Wheel Speed R (rad/s) - from 0x107
 
     // Calculate Yaw and Roll from Quaternion
     float roll = 0.0f;
