@@ -227,6 +227,7 @@ void MotionControlTask(void *argument)
   /* USER CODE BEGIN MotionControlTask */
   Robot_general data;
   float status[20]; // 20个位姿真值输入
+  float status_now[20];
   uint16_t PWM_Value[4]; // 有4个电机的PWM控制输入
   const uint32_t EXEC_PERIOD_US = 20 * 1000; // 执行周期 10ms => 10000us
   uint64_t exec_tick_us = 0; // 算法执行耗时（us）
@@ -258,11 +259,11 @@ void MotionControlTask(void *argument)
             status[17] = data.FloatBytes.f[1]; // reserved
         }
     }
-
+    memcpy(status_now, status, sizeof(status)); // 备份当前状态，供算法使用
     uint64_t start_tick_us = get_hardware_time_us();
 
     // 执行运动控制算法
-    motion_control_algorithm(status, PWM_Value); // 运动控制算法处理，输出 PWM 控制值
+    motion_control_algorithm(status_now, PWM_Value); // 运动控制算法处理，输出 PWM 控制值
 
     // 发送控制结果：ID 0x180 包含4个uint16 (8字节)
     CAN_Send_Data(0x180, (uint8_t *)PWM_Value, 8);

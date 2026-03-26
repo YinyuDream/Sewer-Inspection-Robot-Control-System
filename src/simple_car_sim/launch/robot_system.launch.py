@@ -16,7 +16,7 @@ def generate_launch_description():
             FindPackageShare('ros2_socketcan'), '/launch/socket_can_bridge.launch.xml'
         ]),
         launch_arguments={
-            'interface': 'can0',
+            'interface': 'vcan0',
             'use_sim_time': use_sim_time,  # 尝试传递给包含的 launch 文件
             'receiver_interval_sec': '0.005',
             'sender_timeout_ns': '100000000'  
