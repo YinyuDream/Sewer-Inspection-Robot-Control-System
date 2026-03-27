@@ -284,7 +284,7 @@ void MotionControlTask(void *argument)
     exec_tick_us = get_hardware_time_us() - start_tick_us;
     data.FloatBytes.f[0] = (float)exec_tick_us / 1000.0f;  // 转换为毫秒
     CAN_Send_Data(0x400, data.FloatBytes.bytes, 4);
-    CAN_Send_Data(0x301,(uint8_t*)&cnt,4);
+    // CAN_Send_Data(0x301,(uint8_t*)&cnt,4);
   }
   /* USER CODE END MotionControlTask */
 }
@@ -412,7 +412,7 @@ void NavigationEkfTask(void *argument)
   {
     // 等待 EKF 触发标志（由 CAN 接收线程在收到 0x300 时设置）
     osThreadFlagsWait(0x02, osFlagsWaitAny, osWaitForever);
-    os_delay(100); // 短暂等待，确保 CAN 数据已完全更新到队列中
+    delay_us(100); // 短暂等待，确保 CAN 数据已完全更新到队列中
     // 清空队列更新传感器数据
     while (osMessageQueueGet(sensorEkfDataHandle, &data, NULL, 0) == osOK)
     {

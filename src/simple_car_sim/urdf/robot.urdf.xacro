@@ -316,10 +316,25 @@
             <joint_name>wheel_rl_joint</joint_name>
             <joint_name>wheel_rr_joint</joint_name>
         </plugin>
+        <!-- 使用 Joint Controller 进行速度控制 (新增) 
+        <plugin filename="libignition-gazebo6-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
+            <jointName>wheel_rl_joint</jointName>
+            <initial_velocity>0.0</initial_velocity>
+            <p_gain>10.0</p_gain>
+            <i_gain>0.1</i_gain>
+            <d_gain>0.0</d_gain>
+        </plugin>
+        <plugin filename="libignition-gazebo6-joint-controller-system.so" name="ignition::gazebo::systems::JointController">
+            <jointName>wheel_rr_joint</jointName>
+            <initial_velocity>0.0</initial_velocity>
+            <p_gain>10.0</p_gain>
+            <i_gain>0.1</i_gain>
+            <d_gain>0.0</d_gain>
+        </plugin>-->
 
         <!-- Steering Position Controllers -->
         <plugin filename="libignition-gazebo-joint-position-controller-system.so" name="ignition::gazebo::systems::JointPositionController">
-            <joint_name>steer_fl_joint</joint_name>
+            <jointName>steer_fl_joint</jointName>
             <p_gain>15.0</p_gain>
             <i_gain>0.01</i_gain>
             <d_gain>0.05</d_gain>
@@ -327,7 +342,7 @@
         </plugin>
         
         <plugin filename="libignition-gazebo-joint-position-controller-system.so" name="ignition::gazebo::systems::JointPositionController">
-            <joint_name>steer_fr_joint</joint_name>
+            <jointName>steer_fr_joint</jointName>
             <p_gain>15.0</p_gain>
             <i_gain>0.01</i_gain>
             <d_gain>0.05</d_gain>

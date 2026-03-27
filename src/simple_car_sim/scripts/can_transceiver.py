@@ -70,9 +70,9 @@ class CanTransceiver(Node):
 
         # 创建一个发布者，将 CAN 帧发送给 ros2_socketcan (默认 /to_can_bus)
         self.can_pub = self.create_publisher(Frame, '/to_can_bus', 100)
-        # Timer: periodically publish simulation timestamp on CAN ID 0x300
-        # 100Hz 发送频率，与 autonomous_control.py 保持一致
-        self.timer = self.create_timer(0.01, self.publish_sim_data, callback_group=self._tx_cb_group)
+        # self.logger = self.create_timer(0.05, self.print_data(), callback_group=self._tx_cb_group) # 20Hz 定时发布仿真数据
+        # 不再使用定时器发布；改为在 odom/joint/imu 三个回调都执行后发布一次
+        # 以保证每次发布都基于三类数据的最新值
         
         self.get_logger().info('CAN Transceiver Node has been started.')
 
@@ -83,7 +83,19 @@ class CanTransceiver(Node):
         self.imu_vel_ang = {'x': 0.0, 'y': 0.0, 'z': 0.0}
         self.imu_acc_lin = {'x': 0.0, 'y': 0.0, 'z': 0.0}
         self.wheel_speed = {'rl': 0.0, 'rr': 0.0}
-        
+        # 三个回调的就绪标志；当全部为 True 时触发一次 publish_sim_data()
+        self._odom_updated = False
+        self._joint_updated = False
+        self._imu_updated = False
+
+    def print_data(self):
+        self.get_logger().info(#f"Pos: ({self.pos['x']:.2f}, {self.pos['y']:.2f}, {self.pos['z']:.2f}), "
+                               #f"Ori: ({self.ori['x']:.2f}, {self.ori['y']:.2f}, {self.ori['z']:.2f}, {self.ori['w']:.2f}), "
+                               #f"Vel Lin: ({self.vel_lin['x']:.2f}, {self.vel_lin['y']:.2f}, {self.vel_lin['z']:.2f}), "
+                               #f"Vel Ang: ({self.vel_ang['x']:.2f}, {self.vel_ang['y']:.2f}, {self.vel_ang['z']:.2f}), "
+                               #f"IMU Acc Lin: ({self.imu_acc_lin['x']:.2f}, {self.imu_acc_lin['y']:.2f}, {self.imu_acc_lin['z']:.2f}), "
+                               #f"IMU Vel Ang: ({self.imu_vel_ang['x']:.2f}, {self.imu_vel_ang['y']:.2f}, {self.imu_vel_ang['z']:.2f}), "
+                               f"Wheel Speed RL: {self.wheel_speed['rl']:.2f}, RR: {self.wheel_speed['rr']:.2f}")   
 
     def can_rx_callback(self, msg):
         # print(f"Received CAN frame ID: {hex(msg.id)}, Data: {msg.data.tobytes().hex()}")
@@ -134,7 +146,9 @@ class CanTransceiver(Node):
         self.ori['x'], self.ori['y'], self.ori['z'], self.ori['w'] = orientation.x, orientation.y, orientation.z, orientation.w
         self.vel_lin['x'], self.vel_lin['y'], self.vel_lin['z'] = linear_vel.x, linear_vel.y, linear_vel.z
         self.vel_ang['x'], self.vel_ang['y'], self.vel_ang['z'] = angular_vel.x, angular_vel.y, angular_vel.z
-        # 不再在回调中同步发送，由定时器统一发送
+        # 标记 odom 已更新；当三个回调都更新后触发一次发布
+        self._odom_updated = True
+        self._check_and_publish()
 
     def cmd_joint_state_callback(self, msg):
         """
@@ -146,6 +160,9 @@ class CanTransceiver(Node):
                 self.wheel_speed['rl'] = msg.velocity[i]
             elif name == 'wheel_rr_joint' and len(msg.velocity) > i:
                 self.wheel_speed['rr'] = msg.velocity[i]
+        # 标记 joint 已更新；当三个回调都更新后触发一次发布
+        self._joint_updated = True
+        self._check_and_publish()
 
     def cmd_imu_callback(self, msg):
         """
@@ -157,11 +174,28 @@ class CanTransceiver(Node):
         ang_vel = msg.angular_velocity
         self.imu_acc_lin['x'], self.imu_acc_lin['y'], self.imu_acc_lin['z'] = lin_acc.x, lin_acc.y, lin_acc.z
         self.imu_vel_ang['x'], self.imu_vel_ang['y'], self.imu_vel_ang['z'] = ang_vel.x, ang_vel.y, ang_vel.z
+        # 标记 imu 已更新；当三个回调都更新后触发一次发布
+        self._imu_updated = True
+        self._check_and_publish()
 
+
+    def _check_and_publish(self):
+        """当 odom/joint/imu 三个回调都已更新时调用一次 publish_sim_data。
+        使用发送锁保证发送序列的原子性。
+        """
+        with self._tx_lock:
+            if self._odom_updated and self._joint_updated and self._imu_updated:
+                # 重置标志以便下一轮等待
+                self._odom_updated = self._joint_updated = self._imu_updated = False
+                try:
+                    self.publish_sim_data()
+                except Exception as e:
+                    self.get_logger().error(f'Error publishing sim data from _check_and_publish: {e}')
 
     def publish_sim_data(self):
         """Publish the current simulation time (seconds as float) on CAN ID 0x300."""
         # print("Publishing sim data")
+        self.print_data()
         try:
             # dt 在函数开头、发送任何帧之前计算，准确反映两次 odom 回调的真实间隔
             now = self.get_clock().now()
@@ -174,16 +208,16 @@ class CanTransceiver(Node):
             self.send_can_2_float(0x100, self.pos['x'], self.pos['y'])
             self.send_can_2_float(0x101, self.pos['z'], self.ori['x'])
             self.send_can_2_float(0x102, self.ori['y'], self.ori['z'])
-            micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
+            # micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
             self.send_can_2_float(0x103, self.ori['w'], self.vel_lin['x'])
             self.send_can_2_float(0x104, self.vel_lin['y'], self.vel_lin['z'])
             self.send_can_2_float(0x105, self.vel_ang['x'], self.vel_ang['y'])
-            micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
+            # micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
             self.send_can_2_float(0x106, self.vel_ang['z'], 0.0)
             self.send_can_2_float(0x107, self.wheel_speed['rl'], self.wheel_speed['rr'])
 
             self.send_can_2_float(0x200, self.imu_acc_lin['x'], self.imu_acc_lin['y'])
-            micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
+            # micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
             self.send_can_2_float(0x201, self.imu_acc_lin['z'], self.imu_vel_ang['x'])
             self.send_can_2_float(0x202, self.imu_vel_ang['y'], self.imu_vel_ang['z'])
 

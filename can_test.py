@@ -111,12 +111,12 @@ def motion_control_task():
         if not running:
             break
 
-        time.sleep(0.001)  # 等待 5ms，确保数据已更新
+        # time.sleep(0.001)  # 等待 5ms，确保数据已更新
 
         # 获取最新的 dt (从 motion_status[16] 获取，对应 0x108 的第一个 float)
         motion_status_copy = motion_status.copy()  # 避免在处理过程中被更新
         DT = motion_status_copy[16] if motion_status_copy[16] > 0 else 0.01
-
+        # DT = 0.01
         # 解析状态：根据 can_transceiver.py 的映射关系提取变量
         # 0x100: x, y | 0x101: z, qx | 0x102: qy, qz | 0x103: qw, vx | 0x104: vy, vz
         x = motion_status_copy[0]
@@ -246,6 +246,7 @@ def motion_control_task():
 
         # PID for voltage
         def calc_voltage(target_w, cur_w, idx):
+            return target_w
             err = target_w - cur_w
             voltage_i[idx] += err * DT
             # anti-windup

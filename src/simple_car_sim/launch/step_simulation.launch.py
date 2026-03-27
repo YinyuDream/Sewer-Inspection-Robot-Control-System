@@ -17,7 +17,7 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py')
         ),
-        launch_arguments={'gz_args': f'-r {world_file}'}.items(),
+        launch_arguments={'gz_args': f'{world_file}'}.items(),
     )
 
     spawn_entity = Node(
@@ -62,8 +62,8 @@ def generate_launch_description():
             #'/camera/camera_info@sensor_msgs/msg/CameraInfo@ignition.msgs.CameraInfo',
             
             
-            #'/clock@rosgraph_msgs/msg/Clock[ign.msgs.Clock',
-            #'/world/pipe_world/control@ros_gz_interfaces/srv/ControlWorld' # <--- 关键桥接
+            '/clock@rosgraph_msgs/msg/Clock[ign.msgs.Clock',
+            '/world/pipe_world/control@ros_gz_interfaces/srv/ControlWorld' # <--- 关键桥接
         ],
         remappings=[
             ('/model/simple_car/joint/wheel_rl_joint/cmd_force', '/cmd_force_rl'),
