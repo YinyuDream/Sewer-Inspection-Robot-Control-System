@@ -69,7 +69,7 @@ class CanTransceiver(Node):
             callback_group=self._tx_cb_group)
 
         # 创建一个发布者，将 CAN 帧发送给 ros2_socketcan (默认 /to_can_bus)
-        self.can_pub = self.create_publisher(Frame, '/to_can_bus', 10)
+        self.can_pub = self.create_publisher(Frame, '/to_can_bus', 100)
         # Timer: periodically publish simulation timestamp on CAN ID 0x300
         # 100Hz 发送频率，与 autonomous_control.py 保持一致
         self.timer = self.create_timer(0.01, self.publish_sim_data, callback_group=self._tx_cb_group)
@@ -174,16 +174,16 @@ class CanTransceiver(Node):
             self.send_can_2_float(0x100, self.pos['x'], self.pos['y'])
             self.send_can_2_float(0x101, self.pos['z'], self.ori['x'])
             self.send_can_2_float(0x102, self.ori['y'], self.ori['z'])
-            #micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
+            micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
             self.send_can_2_float(0x103, self.ori['w'], self.vel_lin['x'])
             self.send_can_2_float(0x104, self.vel_lin['y'], self.vel_lin['z'])
             self.send_can_2_float(0x105, self.vel_ang['x'], self.vel_ang['y'])
-            #micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
+            micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
             self.send_can_2_float(0x106, self.vel_ang['z'], 0.0)
             self.send_can_2_float(0x107, self.wheel_speed['rl'], self.wheel_speed['rr'])
 
             self.send_can_2_float(0x200, self.imu_acc_lin['x'], self.imu_acc_lin['y'])
-            #micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
+            micro_sleep(100) # 100us 短暂睡眠，防止 FIFO 溢出
             self.send_can_2_float(0x201, self.imu_acc_lin['z'], self.imu_vel_ang['x'])
             self.send_can_2_float(0x202, self.imu_vel_ang['y'], self.imu_vel_ang['z'])
 

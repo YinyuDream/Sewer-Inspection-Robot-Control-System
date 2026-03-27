@@ -111,7 +111,7 @@ def motion_control_task():
         if not running:
             break
 
-
+        time.sleep(0.001)  # 等待 5ms，确保数据已更新
 
         # 获取最新的 dt (从 motion_status[16] 获取，对应 0x108 的第一个 float)
         motion_status_copy = motion_status.copy()  # 避免在处理过程中被更新

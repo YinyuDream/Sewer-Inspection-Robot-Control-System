@@ -2,6 +2,10 @@
 #include "bsp_can.h"
 #include "FreeRTOS.h"
 #include "queue.h"
+#include <stdint.h>
+
+/* 在 freertos.c 中实现的微秒延时函数 */
+extern void delay_us(uint32_t us);
 
 
 
@@ -69,11 +73,17 @@ void CAN_TxTask(void *argument)
 
     for(;;)
     {
-        while (osMessageQueueGet(canTxQueueHandle, &txPacket, NULL, osWaitForever) == osOK)
+
+        if (osMessageQueueGet(canTxQueueHandle, &txPacket, NULL, osWaitForever) == osOK)
         {
-            while (HAL_CAN_AddTxMessage(&hcan1, &txPacket.header, txPacket.data, &TxMailbox) != HAL_OK)
+            while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0)
             {
-                osDelay(1);
+                delay_us(100); // 等待 100us，直到有空闲邮箱
+                taskYIELD(); // 让出 CPU 给其他任务，避免长时间占用 CPU
+            }
+            if (HAL_CAN_AddTxMessage(&hcan1, &txPacket.header, txPacket.data, &TxMailbox) != HAL_OK)
+            {
+                ERROR_HANDLER(); // 发送失败则进入死循环
             }
         }
     }

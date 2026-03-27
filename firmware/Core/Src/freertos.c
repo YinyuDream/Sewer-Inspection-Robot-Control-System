@@ -129,6 +129,17 @@ static inline uint64_t get_hardware_time_us(void) {
     /* Convert cycles to microseconds: cycles * 1,000,000 / SystemCoreClock */
     return (uint64_t)cycles * 1000000ULL / SystemCoreClock;
 }
+void delay_us(uint32_t us)
+{
+    uint64_t start_time = get_hardware_time_us();
+    uint64_t target_time = start_time + us;
+    
+    while(get_hardware_time_us() < target_time)
+    {
+        /* 等待直到达到目标时间 */
+        __NOP(); /* 可选，防止被优化 */
+    }
+}
 /* USER CODE END FunctionPrototypes */
 
 void MotionControlTask(void *argument);
@@ -239,6 +250,7 @@ void MotionControlTask(void *argument)
   {
     // 等待控制触发标志（由 CAN 接收线程在收到 0x300 时设置）
     osThreadFlagsWait(0x01, osFlagsWaitAny, osWaitForever);
+    delay_us(100); // 短暂等待，确保 CAN 数据已完全更新到队列中
     uint32_t cnt = 0;
     // 清空队列更新状态
     while (osMessageQueueGet(motionControlHandle, &data, NULL, 0) == osOK) {
@@ -400,7 +412,7 @@ void NavigationEkfTask(void *argument)
   {
     // 等待 EKF 触发标志（由 CAN 接收线程在收到 0x300 时设置）
     osThreadFlagsWait(0x02, osFlagsWaitAny, osWaitForever);
-    
+    os_delay(100); // 短暂等待，确保 CAN 数据已完全更新到队列中
     // 清空队列更新传感器数据
     while (osMessageQueueGet(sensorEkfDataHandle, &data, NULL, 0) == osOK)
     {

@@ -18,7 +18,7 @@ def generate_launch_description():
         launch_arguments={
             'interface': 'vcan0',
             'use_sim_time': use_sim_time,  # 尝试传递给包含的 launch 文件
-            'receiver_interval_sec': '0.005',
+            'receiver_interval_sec': '0.01',
             'sender_timeout_ns': '100000000'  
         }.items()
     )
