@@ -82,10 +82,10 @@
 
 1. Gazebo 物理引擎以 50–100 Hz 发布 `/odom`、`/imu`、`/joint_states`。
 2. `autonomous_control.py` 订阅这些话题，重发布至 `*_to_firmware` 话题。
-3. `can_transceiver.py` 订阅 `*_to_firmware` 话题，将每个字段序列化为 4 字节 IEEE 754 浮点数，封装为独立 CAN 帧发送。
+3. `can_transceiver.py` 订阅 `*_to_firmware` 话题，将传感器数据打包（每两个浮点数一个 CAN 帧）并通过 `0x100`–`0x107`、`0x200`–`0x202` 发送，最后发送 `0x300` 同步帧。
 4. CAN 帧经物理总线传至 STM32。
 5. STM32 `CanCommunicationTask` 通过中断接收帧 → 入队 → 按 ID 范围分发至对应控制队列。
-6. `MotionControlTask` 出队状态数据，运行 `motion_control_algorithm()`，并将四路控制输出（volt_l、volt_r、steer_l、steer_r）回传为 CAN 帧。
+6. `MotionControlTask` 出队状态数据，运行 `motion_control_algorithm()`，并将四路控制输出（volt_l、volt_r、steer_l、steer_r）打包为单个 CAN 帧（ID `0x180`）回传。
 7. `can_transceiver.py` 解码回传帧，发布至 `/cmd_volts_l`、`/cmd_volts_r`、`/cmd_steer_l`、`/cmd_steer_r`。
 8. `autonomous_control.py` 接收这些话题并驱动 Gazebo 仿真关节。
 
@@ -93,13 +93,18 @@
 
 ## 目录结构
 
-`	ext
+```
 robot/
-├── scripts/
-│   ├── Gazebo.sh                   # 一键构建并启动仿真环境
-│   ├── HIL.sh                      # 启动 HIL 通信与控制链路（需配合 Gazebo.sh）
-│   └── SIL.sh                      # 启动 autonomous_control 节点（需配合 Gazebo.sh）
+├── can_test.py                     # FreeRTOS CAN 通信模拟测试脚本
 ├── create_pipe_world.py            # 生成管道 world/mesh
+├── Explain.md                      # 详细系统设计文档
+├── README.md                       # 快速上手指南
+├── LICENSE                         # MIT 许可证
+├── hil.sh                          # 启动 HIL 通信与控制链路（使用 robot_system.launch.py）
+├── sil.sh                          # 启动 SIL 控制链路（使用 robot_system.launch.py）
+├── sim.sh                          # 构建并启动标准仿真（simulation.launch.py）
+├── ssim.sh                         # 构建并启动锁步仿真（step_simulation.launch.py）
+├── mil.sh                          # 单独运行 autonomous_control 节点
 ├── simulation/
 │   ├── STM32/                      # HIL 压力测试与数据
 │   │   ├── hil_stress_test.py
@@ -108,41 +113,69 @@ robot/
 │   │   ├── hil_stress_plot.png
 │   │   └── hill_stress_results_summary.txt
 │   └── control/                    # SIL/仿真测试与数据绘制工具
-│       ├── plot_results_filtered.py
 │       ├── plot_unified.py
 │       └── simulation_data*.png/csv
-├── LICENSE                         # MIT 许可证
 ├── src/
 │   └── simple_car_sim/             # ROS 2 包
 │       ├── package.xml             # 包清单和依赖项
 │       ├── CMakeLists.txt          # ROS 2 构建配置
 │       ├── launch/
-│       │   ├── simulation.launch.py# 主启动文件
-│       │   └── robot_system.launch.py
+│       │   ├── simulation.launch.py         # 主仿真启动文件（标准模式）
+│       │   ├── step_simulation.launch.py    # 锁步仿真启动文件
+│       │   ├── robot_system.launch.py       # SIL/HIL 系统启动文件（标准模式）
+│       │   └── step_robot_system.launch.py  # SIL/HIL 系统启动文件（锁步模式）
 │       ├── urdf/
 │       │   └── robot.urdf.xacro    # 机器人模型 (Xacro/URDF)
 │       ├── worlds/
 │       │   ├── pipe_world.sdf      # Ignition Gazebo 世界文件
 │       │   └── pipe.obj            # 3D 管道轨道网格
 │       ├── rviz/
-│       │   └── config.rviz         # RViz 2 配置文件
+│       │   ├── config.rviz         # RViz 2 配置文件
+│       │   └── auto_display.rviz   # 自动显示配置文件
 │       └── scripts/
-│           ├── autonomous_control.py # 主 ROS 2 控制节点 (SIL)
-│           ├── can_transceiver.py    # CAN <-> ROS 2 桥接节点 (HIL)
-│           ├── battery_sim.py        # 虚拟电池仿真器
-│           └── slam_interface.py     # SLAM 接口存根
+│           ├── autonomous_control.py  # 主 ROS 2 控制节点 (标准 SIL)
+│           ├── step_control.py        # ROS 2 锁步控制节点 (支持 Gazebo 步进控制)
+│           ├── can_transceiver.py     # CAN <-> ROS 2 桥接节点 (HIL)
+│           ├── battery_sim.py         # 虚拟电池仿真器
+│           └── slam_interface.py      # SLAM 接口存根
 └── firmware/
     ├── CMakeLists.txt              # 固件顶层 CMake
     ├── CMakePresets.json           # Debug/Release 构建预设
     ├── STM32F407XX_FLASH.ld        # 链接脚本
+    ├── startup_stm32f407xx.s       # ARM Cortex-M4 启动汇编
+    ├── Controller.ioc              # STM32CubeMX 项目文件
+    ├── .clangd                     # Clangd 语言服务器配置
+    ├── .settings/                  # 开发环境设置（IDE 配置）
+    ├── COLCON_IGNORE               # 标记为 ROS 2 工作空间忽略
     ├── cmake/
     │   ├── gcc-arm-none-eabi.cmake # ARM 交叉编译工具链
-    │   └── stm32cubemx/            # STM32CubeMX 生成代码
+    │   ├── starm-clang.cmake       # Clang 交叉编译配置
+    │   └── stm32cubemx/            # STM32CubeMX 生成代码（HAL 配置）
     ├── Core/
-    │   ├── Inc/                    # C 头文件 (main.h, control.h 等)
-    │   └── Src/                    # C 源文件 (main.c, control.c, freertos.c 等)
-    └── can_sender.py               # 独立 CAN 消息发送工具
-`
+    │   ├── Inc/                    # C 头文件
+    │   │   ├── main.h              # 主程序头文件
+    │   │   ├── control.h           # 运动控制算法声明
+    │   │   ├── bsp_can.h           # CAN 总线驱动
+    │   │   ├── ekf.h               # EKF 状态估计（存根）
+    │   │   ├── power_management.h  # 电源管理（存根）
+    │   │   └── FreeRTOSConfig.h    # FreeRTOS 配置文件
+    │   └── Src/                    # C 源文件
+    │       ├── main.c              # 主程序入口
+    │       ├── control.c           # 运动控制算法（Stanley + PID）
+    │       ├── bsp_can.c           # CAN 总线驱动实现
+    │       ├── freertos.c          # FreeRTOS 任务定义
+    │       ├── ekf.c               # EKF 状态估计（存根）
+    │       └── power_management.c  # 电源管理（存根）
+    ├── Drivers/
+    │   ├── CMSIS/                  # ARM Cortex-M 软件接口
+    │   └── STM32F4xx_HAL_Driver/   # STM32 HAL 库
+    ├── Middlewares/
+    │   ├── ST/STM32_USB_Device_Library/   # USB 设备库
+    │   └── Third_Party/FreeRTOS/   # FreeRTOS v10.3.1
+    ├── USB_DEVICE/
+    │   ├── App/                    # USB 应用层
+    │   └── Target/                 # USB 目标配置
+```
 
 ---
 
@@ -192,7 +225,7 @@ robot/
 | 关节 | 类型 | 范围 / 控制方式 |
 |---|---|---|
 | `suspension_fl/fr/rl/rr_joint` | 棱柱（垂直） | 行程 ±10 cm；弹簧 2000 N/m，阻尼 50 Nms |
-| `steer_fl/fr_joint` | 旋转 | ±0.6 rad；PD 位置控制 Kp=15，Kd=0.2 |
+| `steer_fl/fr_joint` | 旋转 | ±0.6 rad；PID 位置控制 Kp=15，Ki=0.01，Kd=0.05 |
 | `wheel_fl/fr_joint` | 旋转（镜像转向关节）| 跟随转向关节 |
 | `wheel_rl/rr_joint` | 连续旋转 | 力控制（来自 Gazebo 桥接）|
 
@@ -200,9 +233,9 @@ robot/
 
 | 传感器 | 频率 | 状态 |
 |---|---|---|
-| IMU（`/imu`）| 50 Hz | 启用 |
-| 激光雷达（`/scan`）| — | 禁用（已注释）|
-| 摄像头（`/camera/image_raw`）| — | 禁用（已注释）|
+| IMU（`/imu`）| 100 Hz | 启用 |
+| 激光雷达（`/scan`）| 10 Hz | 硬件定义但未启用（有传感器定义，但未实际使用） |
+| 摄像头（`/camera/image_raw`）| 30 Hz | 硬件定义但未启用（有传感器定义，但未实际使用） |
 
 ---
 
@@ -318,7 +351,7 @@ expected_speed = max(expected_speed, 0.4)
 双级滤波，防止突变转向：
 
 1. **低通滤波**：`filtered_delta = 0.3 * filtered_delta + 0.7 * raw_delta`
-2. **斜率限制器**：每个时步最大变化量 = `100 rad/s * dt`
+2. **斜率限制器**：每个时步最大变化量 = `100 rad/s * dt`（固件） / `10 rad/s * dt`（仿真）
 
 ### 直流电机动力学模型（仅 SIL）
 
@@ -347,58 +380,55 @@ torque    = Kt * i - b * omega
 
 ## CAN 通信协议
 
-CAN 总线：`can0`，标准 11 位 ID，1 Mbps。所有浮点值均以 4 字节 IEEE 754 小端格式传输（另有说明除外）。
+CAN 总线：`can0`，标准 11 位 ID，1 Mbps。所有浮点值均以 4 字节 IEEE 754 小端格式传输（另有说明除外）。为提高带宽效率，主机到 STM32 的传感器数据帧将两个浮点数值打包到一个 CAN 帧中（共 8 字节），而 STM32 到主机的控制输出帧将四个 uint16 值打包到一个 CAN 帧中。
 
 ### 主机 → STM32（传感器数据）
 
-| CAN ID | 内容 | 格式 |
+每个 CAN ID 携带两个 IEEE 754 浮点数（小端），顺序如下：
+
+| CAN ID | 内容（第一个浮点数，第二个浮点数） | 格式 |
 |---|---|---|
-| `0x100` | 里程计位置 X | float32 |
-| `0x101` | 里程计位置 Y | float32 |
-| `0x102` | 里程计位置 Z | float32 |
-| `0x103` | 四元数 X | float32 |
-| `0x104` | 四元数 Y | float32 |
-| `0x105` | 四元数 Z | float32 |
-| `0x106` | 四元数 W | float32 |
-| `0x107` | 线速度 X | float32 |
-| `0x108` | 线速度 Y | float32 |
-| `0x109` | 线速度 Z | float32 |
-| `0x10A` | 角速度 X | float32 |
-| `0x10B` | 角速度 Y | float32 |
-| `0x10C` | 角速度 Z | float32 |
-| `0x10D` | 线加速度 X | float32 |
-| `0x10E` | 线加速度 Y | float32 |
-| `0x10F` | 线加速度 Z | float32 |
-| `0x110` | 左后轮速（rad/s）| float32 |
-| `0x111` | 右后轮速（rad/s）| float32 |
-| `0x200` | IMU 加速度 X（m/s²）| float32 |
-| `0x201` | IMU 加速度 Y | float32 |
-| `0x202` | IMU 加速度 Z | float32 |
-| `0x203` | IMU 角速度 X（rad/s）| float32 |
-| `0x204` | IMU 角速度 Y | float32 |
-| `0x205` | IMU 角速度 Z | float32 |
-| `0x206` | 左后轮速（冗余）| float32 |
-| `0x207` | 右后轮速（冗余）| float32 |
+| `0x100` | 里程计位置 X，里程计位置 Y | float32, float32 |
+| `0x101` | 里程计位置 Z，四元数 X | float32, float32 |
+| `0x102` | 四元数 Y，四元数 Z | float32, float32 |
+| `0x103` | 四元数 W，线速度 X | float32, float32 |
+| `0x104` | 线速度 Y，线速度 Z | float32, float32 |
+| `0x105` | 角速度 X，角速度 Y | float32, float32 |
+| `0x106` | 角速度 Z，0.0（保留） | float32, float32 |
+| `0x107` | 左后轮速（rad/s），右后轮速（rad/s） | float32, float32 |
+| `0x200` | IMU 加速度 X（m/s²），IMU 加速度 Y | float32, float32 |
+| `0x201` | IMU 加速度 Z，IMU 角速度 X | float32, float32 |
+| `0x202` | IMU 角速度 Y，IMU 角速度 Z | float32, float32 |
+| `0x300` | 时间步长 dt（s），0.0（保留）同步帧 | float32, float32 |
 | `0x700` | Ping / 回环测试帧 | 原始字节 |
+
+> 注：早期版本中使用的 ID `0x110`、`0x111`、`0x206`、`0x207` 已不再使用，车轮速度数据统一通过 `0x107` 发送。
+
+> 注：`can_transceiver.py` 在每次收到 odom、joint_states 和 IMU 回调后，按上述顺序发布所有传感器帧，最后发送 `0x300` 同步帧以触发固件控制计算。
 
 ### STM32 → 主机（控制输出和遥测）
 
 | CAN ID | 内容 | 格式 |
 |---|---|---|
-| `0x180` | 左电机电压（mV + 0x8000 偏置）| uint16 LE |
-| `0x181` | 右电机电压（mV + 0x8000 偏置）| uint16 LE |
-| `0x182` | 左转向角（mrad + 0x8000 偏置）| uint16 LE |
-| `0x183` | 右转向角（mrad + 0x8000 偏置）| uint16 LE |
-| `0x400` | 运动控制执行时间（ms）| float32 |
-| `0x500` | MotionControl 任务栈水位（words）| float32 |
-| `0x501` | CAN 任务栈水位（words）| float32 |
-| `0x502` | EKF 任务栈水位（words）| float32 |
-| `0x503` | Power 任务栈水位（words）| float32 |
-| `0x701` | Pong / 回环应答 | 原始字节（镜像 0x700）|
-| `0x080`–`0x089` | 电源管理输出 | float32 |
-| `0x280`–`0x289` | EKF 状态估计输出 | float32 |
+| `0x180` | 左电机电压、右电机电压、左转向角、右转向角（4×uint16 LE） | 4×uint16 LE |
+| `0x400` | 运动控制执行时间（ms） | float32 |
+| `0x500` | MotionControl 任务栈水位（words） | float32 |
+| `0x501` | CAN 任务栈水位（words） | float32 |
+| `0x502` | EKF 任务栈水位（words） | float32 |
+| `0x503` | Power 任务栈水位（words） | float32 |
+| `0x701` | Pong / 回环应答 | 原始字节（镜像 0x700） |
+| `0x080`–`0x089` | 电源管理输出（存根，未启用） | float32 |
+| `0x280`–`0x289` | EKF 状态估计输出（存根，未启用） | float32 |
 
-**控制输出编码（`0x180`–`0x183`）：**
+> 注：早期版本中使用的独立 ID `0x181`、`0x182`、`0x183` 已合并到 `0x180` 帧中。
+
+**控制输出编码（`0x180` 帧）：**
+
+帧数据包含四个连续的 uint16 小端值，顺序为：
+1. 左电机电压（mV + 0x8000 偏置）
+2. 右电机电压（mV + 0x8000 偏置）
+3. 左转向角（mrad + 0x8000 偏置）
+4. 右转向角（mrad + 0x8000 偏置）
 
 ```
 编码：raw = (value_in_mV_or_mrad) + 0x8000
@@ -429,9 +459,11 @@ CAN 总线：`can0`，标准 11 位 ID，1 Mbps。所有浮点值均以 4 字节
 - **维护者**：yinyudream
 - **许可证**：MIT
 
-### 启动文件（`simulation.launch.py`）
+### 启动文件
 
-启动完整仿真环境：
+**`simulation.launch.py`**：标准仿真启动文件
+
+启动完整仿真环境（实时运行）：
 
 | 组件 | 包 | 说明 |
 |---|---|---|
@@ -441,9 +473,36 @@ CAN 总线：`can0`，标准 11 位 ID，1 Mbps。所有浮点值均以 4 字节
 | 参数桥接 | `ros_gz_bridge` | 双向桥接时钟、关节、力、转向、IMU、里程计 |
 | RViz 2 | `rviz2` | 加载 `rviz/config.rviz` |
 
+**`step_simulation.launch.py`**：锁步仿真启动文件
+
+启动锁步仿真环境（精确步进控制）：
+
+| 组件 | 包 | 说明 |
+|---|---|---|
+| Ignition Gazebo | `ros_gz_sim` | 加载 `pipe_world.sdf`（不自动运行，等待控制）|
+| 机器人生成器 | `ros_gz_sim/create` | 在 `(5.0, -9.6, 0.0)` 处生成 `simple_car` |
+| robot_state_publisher | `robot_state_publisher` | 从 Xacro URDF 发布 TF，`use_sim_time=True` |
+| 参数桥接 | `ros_gz_bridge` | 双向桥接时钟、关节、力、转向、IMU、里程计，额外桥接控制服务 |
+| RViz 2 | `rviz2` | 加载 `rviz/config.rviz` |
+
+**`robot_system.launch.py`**：标准 SIL/HIL 系统启动文件
+
+启动完整的控制系统（标准模式）：
+- `ros2_socketcan` 桥接（接口：`vcan0`）
+- `can_transceiver.py` CAN 适配层
+- `autonomous_control.py` 自动控制算法层
+- RViz 2 可视化
+
+**`step_robot_system.launch.py`**：锁步 SIL/HIL 系统启动文件
+
+启动完整的控制系统（锁步模式）：
+- `ros2_socketcan` 桥接（接口：`can0`）
+- `can_transceiver.py` CAN 适配层
+- `step_control.py` 锁步控制算法层
+
 ### 节点：`autonomous_control.py`（`CarController`）
 
-主 SIL 控制节点，运行频率 **100 Hz**（`sim_dt = 0.01 s`）。
+主 SIL 控制节点（标准模式），运行频率 **100 Hz**（`sim_dt = 0.01 s`）。在标准仿真模式下使用，与 Gazebo 实时同步运行。
 
 **订阅话题：**
 
@@ -463,6 +522,8 @@ CAN 总线：`can0`，标准 11 位 ID，1 Mbps。所有浮点值均以 4 字节
 |---|---|---|
 | `/cmd_force_rl` | `std_msgs/Float64` | 左后轮力矩 → Gazebo |
 | `/cmd_force_rr` | `std_msgs/Float64` | 右后轮力矩 → Gazebo |
+| `/cmd_vel_rl` | `std_msgs/Float64` | 左后轮电压指令（用于调试） |
+| `/cmd_vel_rr` | `std_msgs/Float64` | 右后轮电压指令（用于调试） |
 | `/cmd_pos_fl` | `std_msgs/Float64` | 左前转向位置 → Gazebo |
 | `/cmd_pos_fr` | `std_msgs/Float64` | 右前转向位置 → Gazebo |
 | `/odom_to_firmware` | `nav_msgs/Odometry` | 里程计重发布 → `can_transceiver` |
@@ -478,26 +539,49 @@ steering_delta, lateral_error, heading_error, wheel_speed_l, wheel_speed_r
 
 **控制源标志：** `use_external_pwm = True`（默认）。为 `True` 时使用来自 STM32 的指令（HIL 模式）；设为 `False` 则使用内部计算结果（纯 SIL 模式，无需 STM32）。
 
+### 节点：`step_control.py`（`CarController`）
+
+锁步 SIL 控制节点，运行频率 **100 Hz**（`sim_dt = 0.01 s`）。在锁步仿真模式下使用，通过 Gazebo 控制服务精确控制仿真步进，确保传感器数据与控制指令严格同步。
+
+**特性：**
+- 通过 `/world/pipe_world/control` 服务调用 Gazebo 步进控制
+- 每次控制循环前精确步进仿真 `steps_per_loop` 步（默认 10 步，每步 0.001 s）
+- 等待传感器数据更新后再执行控制计算
+- 支持外部 PWM 指令（HIL 模式）和内部计算（SIL 模式）
+
+**订阅话题：** 与 `autonomous_control.py` 相同
+
+**发布话题：** 与 `autonomous_control.py` 相同，额外发布 `/cmd_vel_rl` 和 `/cmd_vel_rr` 用于速度控制
+
+**锁步机制：**
+1. 调用 `ControlWorld` 服务步进仿真
+2. 等待 `/clock` 话题更新到目标时间
+3. 执行控制算法
+4. 发布控制指令到 Gazebo
+5. 重复循环
+
 ### 节点：`can_transceiver.py`（`CanTransceiver`）
 
-通过 `ros2_socketcan` 桥接 ROS 2 话题与 SocketCAN。
+通过 `ros2_socketcan` 桥接 ROS 2 话题与 SocketCAN。为提高带宽效率，传感器数据帧将两个浮点数值打包到一个 CAN 帧中。
 
 **订阅 → CAN 发送：**
 
-| ROS 话题 | CAN ID |
+传感器数据在收到 odom、joint_states 和 IMU 三个回调后统一发送，打包顺序如下：
+
+| ROS 话题 | CAN ID（每个 ID 携带两个浮点数） |
 |---|---|
-| `/odom_to_firmware` | `0x100`–`0x10F` |
-| `/joint_states_to_firmware` | `0x110`、`0x111`、`0x206`、`0x207` |
-| `/imu_to_firmware` | `0x200`–`0x205` |
+| `/odom_to_firmware`（位置、四元数、速度） | `0x100`–`0x107`（详见 CAN 通信协议表） |
+| `/joint_states_to_firmware`（车轮速度） | `0x107`（与 odom 帧共享） |
+| `/imu_to_firmware`（加速度、角速度） | `0x200`–`0x202` |
+| 同步帧（触发固件控制计算） | `0x300`（dt, 0.0） |
 
 **CAN 接收 → ROS 发布：**
 
 | CAN ID | ROS 话题 | 解码方式 |
 |---|---|---|
-| `0x180` | `/cmd_volts_l` | `(uint16_LE - 0x8000) / 1000.0` V |
-| `0x181` | `/cmd_volts_r` | 同上 |
-| `0x182` | `/cmd_steer_l` | `(uint16_LE - 0x8000) / 1000.0` rad |
-| `0x183` | `/cmd_steer_r` | 同上 |
+| `0x180` | `/cmd_volts_l`，`/cmd_volts_r`，`/cmd_steer_l`，`/cmd_steer_r` | 帧数据包含四个 uint16 小端值，依次解码为：`(uint16_LE - 0x8000) / 1000.0` |
+| `0x400` | （未订阅）运动控制执行时间（ms） | float32 |
+| `0x500`–`0x503` | （未订阅）任务栈水位 | float32 |
 
 ### 节点：`battery_sim.py`
 
@@ -522,6 +606,23 @@ python3 create_pipe_world.py
 ---
 
 ## STM32 嵌入式固件
+
+### 项目结构
+
+固件目录遵循 STM32CubeMX 生成的典型项目结构，包含以下核心部分：
+
+- **Core/**：用户应用程序代码，包括主循环、控制算法、外设驱动。
+  - `Core/Src/control.c`：Stanley 路径跟踪 + 侧倾稳定控制算法（与 Python 仿真完全一致）。
+  - `Core/Src/freertos.c`：FreeRTOS 任务定义与 CAN 通信任务。
+  - `Core/Src/bsp_can.c`：CAN 总线驱动（滤波、中断、发送/接收）。
+  - `Core/Inc/`：对应头文件。
+- **Drivers/**：STM32 HAL 库与 CMSIS 设备文件。
+- **Middlewares/**：FreeRTOS v10.3.1 和 USB 设备库。
+- **USB_DEVICE/**：USB CDC 虚拟串口配置。
+- **cmake/**：交叉编译工具链定义与 STM32CubeMX 生成代码的 CMake 集成。
+- **其他配置文件**：`STM32F407XX_FLASH.ld`（链接脚本）、`startup_stm32f407xx.s`（启动汇编）、`Controller.ioc`（STM32CubeMX 项目文件）。
+
+完整目录树见上文[目录结构](#目录结构)小节。
 
 ### 硬件规格
 
@@ -646,11 +747,13 @@ void power_management_logic(float *power_status, float *instruction);  // 电源
 
 ### ROS 2 仿真（SIL）
 
+**标准仿真模式（实时运行）：**
+
 ```bash
 cd /home/yinyudream/robot
 
 # 完整构建并启动（终止已有进程、构建、加载、启动）：
-bash scripts/Gazebo.sh
+bash sim.sh
 
 # 或手动执行：
 pkill -f "ign gazebo"; pkill -f "ros2"; pkill -f "rviz"; pkill -f "parameter_bridge"
@@ -659,9 +762,24 @@ source install/setup.bash
 ros2 launch simple_car_sim simulation.launch.py
 ```
 
-> `Gazebo.sh` 仅启动仿真环境（Gazebo + 模型 + RViz），不单独包含控制闭环。
+**锁步仿真模式（精确控制仿真步进）：**
 
-> **提示：** `scripts/Gazebo.sh` 执行完整重建。若仅修改 Python / Launch / URDF 文件，可使用 `--symlink-install` 加速构建：
+```bash
+cd /home/yinyudream/robot
+
+# 构建并启动锁步仿真：
+bash ssim.sh
+
+# 或手动执行：
+pkill -f "ign gazebo"; pkill -f "ros2"; pkill -f "rviz"; pkill -f "parameter_bridge"
+colcon build --packages-select simple_car_sim
+source install/setup.bash
+ros2 launch simple_car_sim step_simulation.launch.py
+```
+
+> `sim.sh` 和 `ssim.sh` 仅启动仿真环境（Gazebo + 模型 + RViz），不单独包含控制闭环。
+
+> **提示：** 若仅修改 Python / Launch / URDF 文件，可使用 `--symlink-install` 加速构建：
 > ```bash
 > colcon build --symlink-install --packages-select simple_car_sim
 > ```
@@ -670,29 +788,49 @@ ros2 launch simple_car_sim simulation.launch.py
 
 ```bash
 source install/setup.bash
+
+# 标准控制节点：
 ros2 run simple_car_sim autonomous_control.py --ros-args -p use_sim_time:=true
 
+# 锁步控制节点：
+ros2 run simple_car_sim step_control.py --ros-args -p use_sim_time:=true
+
 # 或直接使用脚本：
-bash scripts/SIL.sh
+bash sil.sh       # 标准 SIL（使用 robot_system.launch.py）
+bash mil.sh       # 单独运行 autonomous_control 节点
 ```
 
-> SIL 实际运行需要两步：先 `bash scripts/Gazebo.sh`，再 `bash scripts/SIL.sh`。
+> SIL 实际运行需要两步：先 `bash sim.sh`（或 `bash ssim.sh`），再 `bash sil.sh`（或运行对应控制节点）。
 
 ### HIL 联调运行（仿真 + CAN + 控制）
 
-```bash
-# 第一步：启动仿真器
-bash scripts/Gazebo.sh
+**HIL 模式（锁步控制，使用物理 CAN 接口）：**
 
-# 第二步：启动 HIL 通信与控制链路
-bash scripts/HIL.sh
+```bash
+# 第一步：启动锁步仿真器
+bash ssim.sh
+
+# 第二步：启动 HIL 通信与控制链路（使用物理 can0 接口）
+bash hil.sh
 ```
 
-> HIL 同样是双脚本协同：`Gazebo.sh` + `HIL.sh`。其中 `HIL.sh` 启动 `robot_system.launch.py`（`ros2_socketcan` + `can_transceiver.py` + `autonomous_control.py`）。
+**标准 SIL 模式（虚拟 CAN 接口）：**
+
+```bash
+# 第一步：启动标准仿真器
+bash sim.sh
+
+# 第二步：启动 SIL 控制链路（使用虚拟 vcan0 接口）
+bash sil.sh
+```
+
+> HIL 模式使用锁步仿真和控制，通过物理 `can0` 接口与 STM32 通信。`hil.sh` 启动 `step_robot_system.launch.py`（`ros2_socketcan` + `can_transceiver.py` + `step_control.py`）。
+
+> SIL 模式使用标准仿真和虚拟 `vcan0` 接口。`sil.sh` 启动 `robot_system.launch.py`（`ros2_socketcan` + `can_transceiver.py` + `autonomous_control.py` + RViz）。
 
 ### 纯 SIL 模式（无需 STM32）
 
-编辑 `src/simple_car_sim/scripts/autonomous_control.py`，将：
+编辑控制节点文件（`autonomous_control.py` 或 `step_control.py`），将：
 
 ```python
 use_external_pwm = True
@@ -705,6 +843,8 @@ use_external_pwm = False
 ```
 
 重新构建后即可在无 STM32 硬件的环境下运行完整仿真。
+
+**注意：** 两个控制节点都支持此标志切换。标准模式使用 `autonomous_control.py`，锁步模式使用 `step_control.py`。
 
 ### 可视化 URDF 模型
 
@@ -795,10 +935,10 @@ openocd -f interface/stlink.cfg -f target/stm32f4x.cfg \
 | PID Kf（前馈）| `Kf=0.5` | `KF 0.5f` | 0.5 |
 | 侧倾 P 增益 | `K_roll_p=4.0` | `K_ROLL_P 4.0f` | 4.0 |
 | 侧倾 D 增益 | `K_roll_d=1.5` | `K_ROLL_D 1.5f` | 1.5 |
-| 侧倾 I 增益 | `0.5 * sum_roll` | `K_ROLL_I 0.5f` | 0.5 |
+| 侧倾 I 增益 | `0.5` | `K_ROLL_I 0.5f` | 0.5 |
 | 最大转向角 | ±45° | ±45° | ±0.785 rad |
 | 转向滤波 alpha | `0.7` | `FILTER_ALPHA 0.7f` | 0.7 |
-| 转向斜率限制 | `100 rad/s` | `DELTA_SLEW_RATE 100.0f` | 100 rad/s |
+| 转向斜率限制 | `delta_slew_rate=10.0` | `DELTA_SLEW_RATE 100.0f` | 100 rad/s（固件）/ 10 rad/s（仿真） |
 | 电池电压 | `12.0 V` | `BATTERY_VOLTAGE 12.0f` | ±12 V |
 
 ### HIL 测试配置（`hil_stress_test.py`）
@@ -878,7 +1018,9 @@ void power_management_logic(float *power_status, float *instruction);
 
 ### Python API
 
-**`VehicleDynamics`（`autonomous_control.py`）**
+**`VehicleDynamics`（`autonomous_control.py` / `step_control.py`）**
+
+两个控制节点共享相同的车辆动力学算法类。
 
 ```python
 @staticmethod
@@ -899,7 +1041,7 @@ def stanley_control(x, y, yaw, vel, vel_target, corner_center, radius, roll, sum
 # 完整 Stanley + 侧倾稳定控制，返回轮速目标、转向角及误差分量
 ```
 
-**`DCMotorSim`（`autonomous_control.py`）**
+**`DCMotorSim`（`autonomous_control.py` / `step_control.py`）**
 
 ```python
 def __init__(self, R=0.5, L=0.01, Kt=1.0, Ke=1.0, b=0.1, J=0.02, dt=0.05)
@@ -944,10 +1086,14 @@ def send_can_float(self, can_id: int, value: float) -> None
 
 ### SIL 仿真数据
 
-以 100 Hz 记录至 `simulation_data.csv`，可生成以下图表：
+以 100 Hz 记录至 `simulation_data.csv`，可使用 `plot_unified.py` 生成以下图表：
 
-- `simulation_data.png` — 原始仿真数据（位置、速度、航向误差、横向误差）
-- `simulation_data_filtered.png` — 滤波/平滑后数据
+- `simulation_data_unified_trajectory.png` — 轨迹与路径跟踪
+- `simulation_data_unified_velocity.png` — 速度与目标速度
+- `simulation_data_unified_wheel_speeds.png` — 左右轮速
+- `simulation_data_unified_steering.png` — 转向角与误差
+- `simulation_data_unified_steering_angles.png` — 左右前轮转向角
+- `simulation_data_unified_roll_heading_lateral.png` — 侧倾、航向与横向误差
 - `hil_stress_plot.png` — HIL 测试运动控制执行时间曲线
 
 绘图命令：
@@ -956,11 +1102,31 @@ def send_can_float(self, can_id: int, value: float) -> None
 cd simulation/control
 
 # SIL 仿真结果
-python3 plot_results_filtered.py
+python3 plot_unified.py
 
 # HIL 压力测试结果
 python3 plot_results_stm32.py
 ```
+
+### CAN 通信模拟测试
+
+`can_test.py` 脚本提供 FreeRTOS CAN 通信模拟测试功能，使用 `python-can` 库与 `vcan0` 接口通信，模拟多任务 CAN 数据处理：
+
+```bash
+# 运行 CAN 测试脚本（需要配置 vcan0 接口）
+python3 can_test.py
+```
+
+**功能特性：**
+- 模拟 FreeRTOS 中的多任务状态数组：`motion_status`、`power_status`、`sensor_data`
+- 实现完整的运动控制任务 `motion_control_task()`，包含 Stanley 轨迹跟踪 + 差速速度分配 + 电机电压 PID
+- CAN 接收与分发机制，支持 ID 范围路由
+- 数据记录功能，可将系统状态记录至 CSV 文件
+
+**使用场景：**
+- 在没有 STM32 硬件的情况下测试 CAN 通信协议
+- 验证运动控制算法与 CAN 数据流的兼容性
+- 调试 CAN 帧格式和路由逻辑
 
 ---
 
@@ -984,11 +1150,17 @@ colcon build --symlink-install --packages-select simple_car_sim
 # 加载工作空间
 source install/setup.bash
 
-# 启动完整仿真
+# 启动完整仿真（标准模式）
 ros2 launch simple_car_sim simulation.launch.py
 
-# 仅运行控制节点
+# 启动锁步仿真（精确步进控制）
+ros2 launch simple_car_sim step_simulation.launch.py
+
+# 仅运行控制节点（标准模式）
 ros2 run simple_car_sim autonomous_control.py --ros-args -p use_sim_time:=true
+
+# 仅运行控制节点（锁步模式）
+ros2 run simple_car_sim step_control.py --ros-args -p use_sim_time:=true
 
 # 可视化 URDF
 ros2 launch urdf_tutorial display.launch.py \

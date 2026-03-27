@@ -10,3 +10,10 @@ Debug/
 Release/
 JLinkLog.txt
 
+# Compiled output files
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+

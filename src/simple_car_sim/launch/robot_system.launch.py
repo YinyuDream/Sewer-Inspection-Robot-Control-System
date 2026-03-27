@@ -2,13 +2,18 @@ import os
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
 from launch.launch_description_sources import AnyLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     # 1. 定义一个可以在启动时修改的变量 (也可以直接硬编码为 True)
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
+
+    # RViz 配置文件路径
+    rviz_config = PathJoinSubstitution([
+        FindPackageShare('simple_car_sim'), 'rviz', 'auto_display.rviz'
+    ])
 
     # 查找 ros2_socketcan 包中自带的桥接启动文件
     socketcan_bridge_launch = IncludeLaunchDescription(
@@ -49,5 +54,15 @@ def generate_launch_description():
             name='autonomous_control',
             output='screen',
             parameters=[{'use_sim_time': use_sim_time}] # <--- 关键修改
+        ),
+
+        # RViz 可视化
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            name='rviz2',
+            output='screen',
+            arguments=['-d', rviz_config],
+            parameters=[{'use_sim_time': use_sim_time}]
         )
     ])

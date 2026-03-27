@@ -24,3 +24,18 @@ __pycache__/
 *.swo
 *~
 .DS_Store
+
+# ROS 2 database files
+*.db3
+
+# Gazebo/Ignition cache
+.gazebo/
+.ignition/
+
+# Python virtual environments
+venv/
+.env/
+env/
+
+# System and temporary files
+*.pid

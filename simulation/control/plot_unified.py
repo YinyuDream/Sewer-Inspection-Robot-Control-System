@@ -314,5 +314,5 @@ def plot_simulation_data(file_path):
 if __name__ == "__main__":
     file_path = "/home/yinyudream/robot/simulation/control/simulation_data.csv"
     plot_simulation_data(file_path)
-    file_path = "/home/yinyudream/robot/simulation/control/simulation_can_data.csv"
-    plot_simulation_data(file_path)
+    # file_path = "/home/yinyudream/robot/simulation/control/simulation_can_data.csv"
+    # plot_simulation_data(file_path)

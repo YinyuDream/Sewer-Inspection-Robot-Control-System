@@ -53,13 +53,13 @@ def generate_launch_description():
             '/model/simple_car/joint/wheel_rr_joint/cmd_force@std_msgs/msg/Float64@ignition.msgs.Double',
             '/cmd_pos_fl@std_msgs/msg/Float64@ignition.msgs.Double',
             '/cmd_pos_fr@std_msgs/msg/Float64@ignition.msgs.Double',
-            #'/model/simple_car/joint/wheel_rr_joint/cmd_vel@std_msgs/msg/Float64@ignition.msgs.Double',
-            #'/model/simple_car/joint/wheel_rl_joint/cmd_vel@std_msgs/msg/Float64@ignition.msgs.Double',
+            '/model/simple_car/joint/wheel_rr_joint/cmd_vel@std_msgs/msg/Float64@ignition.msgs.Double',
+            '/model/simple_car/joint/wheel_rl_joint/cmd_vel@std_msgs/msg/Float64@ignition.msgs.Double',
             '/imu@sensor_msgs/msg/Imu@ignition.msgs.IMU',
             '/model/simple_car/odometry@nav_msgs/msg/Odometry@ignition.msgs.Odometry',
-            #'/scan@sensor_msgs/msg/LaserScan@ignition.msgs.LaserScan',
-            #'/camera/image_raw@sensor_msgs/msg/Image@ignition.msgs.Image',
-            #'/camera/camera_info@sensor_msgs/msg/CameraInfo@ignition.msgs.CameraInfo',
+            '/scan@sensor_msgs/msg/LaserScan@ignition.msgs.LaserScan',
+            '/camera/image_raw@sensor_msgs/msg/Image@ignition.msgs.Image',
+            '/camera/camera_info@sensor_msgs/msg/CameraInfo@ignition.msgs.CameraInfo',
             
             
             #'/clock@rosgraph_msgs/msg/Clock[ign.msgs.Clock',
@@ -68,8 +68,8 @@ def generate_launch_description():
         remappings=[
             ('/model/simple_car/joint/wheel_rl_joint/cmd_force', '/cmd_force_rl'),
             ('/model/simple_car/joint/wheel_rr_joint/cmd_force', '/cmd_force_rr'),
-            #('/model/simple_car/joint/wheel_rl_joint/cmd_vel', '/cmd_vel_rl'),
-            #('/model/simple_car/joint/wheel_rr_joint/cmd_vel', '/cmd_vel_rr'),
+            ('/model/simple_car/joint/wheel_rl_joint/cmd_vel', '/cmd_vel_rl'),
+            ('/model/simple_car/joint/wheel_rr_joint/cmd_vel', '/cmd_vel_rr'),
             ('/model/simple_car/odometry', '/odom'),
             ('/model/simple_car/joint_states', '/joint_states'),
             #('/model/simple_car/joint_states', '/joint_states_raw'),
@@ -104,6 +104,6 @@ def generate_launch_description():
         spawn_entity,
         robot_state_publisher,
         bridge,
-        rviz,
+        #rviz,
         #throttle_node
     ])

@@ -133,7 +133,7 @@ static void geometric_calculation(float x, float y, float yaw, float vel, float 
 
 // PID Controller for Motor Voltage
 static float calculate_voltage_pid(float target_w, float current_w, int wheel_idx) {
-    return target_w;
+    // return target_w;
     float error = target_w - current_w;
     
     voltage_error_sum[wheel_idx] += error * DT;

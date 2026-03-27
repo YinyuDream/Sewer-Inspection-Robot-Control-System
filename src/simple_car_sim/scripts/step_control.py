@@ -217,6 +217,8 @@ class CarController(Node):
 
     # ---------------- 初始化与回调 ---------------- #
     def _init_publishers_subscribers(self):
+        self.pub_vel_rl = self.create_publisher(Float64, '/cmd_vel_rl', 10)
+        self.pub_vel_rr = self.create_publisher(Float64, '/cmd_vel_rr', 10)
         self.pub_rl = self.create_publisher(Float64, '/cmd_force_rl', 10)
         self.pub_rr = self.create_publisher(Float64, '/cmd_force_rr', 10)
         self.pub_steer_fl = self.create_publisher(Float64, '/cmd_pos_fl', 10)
@@ -412,8 +414,10 @@ class CarController(Node):
         torque_l_cmd = self.motor_l.step(voltage_l, self.wheel_rl_speed)
         torque_r_cmd = self.motor_r.step(voltage_r, self.wheel_rr_speed)
 
-        self.pub_rl.publish(Float64(data=torque_l_cmd))
-        self.pub_rr.publish(Float64(data=torque_r_cmd))
+        # self.pub_rl.publish(Float64(data=torque_l_cmd))
+        # self.pub_rr.publish(Float64(data=torque_r_cmd))
+        self.pub_vel_rl.publish(Float64(data=voltage_l))
+        self.pub_vel_rr.publish(Float64(data=voltage_r))
 
     def _log_data(self, delta, e_geo, theta_e):
         now = self.current_sim_time

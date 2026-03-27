@@ -235,8 +235,8 @@ class CarController(Node):
         # 控制指令发布
         self.pub_rl = self.create_publisher(Float64, '/cmd_force_rl', 10)
         self.pub_rr = self.create_publisher(Float64, '/cmd_force_rr', 10)
-        # self.pub_vel_rl = self.create_publisher(Float64, '/cmd_vel_rl', 10)
-        # self.pub_vel_rr = self.create_publisher(Float64, '/cmd_vel_rr', 10)
+        self.pub_vel_rl = self.create_publisher(Float64, '/cmd_vel_rl', 10)
+        self.pub_vel_rr = self.create_publisher(Float64, '/cmd_vel_rr', 10)
         self.pub_steer_fl = self.create_publisher(Float64, '/cmd_pos_fl', 10)
         self.pub_steer_fr = self.create_publisher(Float64, '/cmd_pos_fr', 10)
 
@@ -256,7 +256,7 @@ class CarController(Node):
         self.create_subscription(Float64, '/cmd_steer_l', self.cb_steer_l, 10)
         self.create_subscription(Float64, '/cmd_steer_r', self.cb_steer_r, 10)
         
-        self.use_external_pwm = True 
+        self.use_external_pwm = True
         self.ext_volts_l = 0.0
         self.ext_volts_r = 0.0
         self.ext_steer_l = 0.0
@@ -336,7 +336,7 @@ class CarController(Node):
 
     # ---------------- 传感器回调函数 ---------------- #
     def odom_callback(self, msg):
-        print("Odom callback received")
+        # print("Odom callback received")
         self.pos_x = msg.pose.pose.position.x
         self.pos_y = msg.pose.pose.position.y
         self.pos_z = msg.pose.pose.position.z
@@ -502,11 +502,11 @@ class CarController(Node):
                 f"wheel_spd=({self.wheel_rl_speed:.3f},{self.wheel_rr_speed:.3f})"
             )
             '''
-        self.pub_rl.publish(Float64(data=torque_l_cmd))
-        self.pub_rr.publish(Float64(data=torque_r_cmd))
+        #self.pub_rl.publish(Float64(data=torque_l_cmd))
+        #self.pub_rr.publish(Float64(data=torque_r_cmd))
 
-        # self.pub_vel_rl.publish(Float64(data=voltage_l))
-        # self.pub_vel_rr.publish(Float64(data=voltage_r))
+        self.pub_vel_rl.publish(Float64(data=voltage_l))
+        self.pub_vel_rr.publish(Float64(data=voltage_r))
 
     def _log_data(self, delta, e_geo, theta_e):
         """记录系统状态至 CSV 文件"""

@@ -246,7 +246,7 @@ def motion_control_task():
 
         # PID for voltage
         def calc_voltage(target_w, cur_w, idx):
-            return target_w
+            # return target_w
             err = target_w - cur_w
             voltage_i[idx] += err * DT
             # anti-windup
@@ -261,10 +261,10 @@ def motion_control_task():
         volt_r = calc_voltage(w_target_r, w_act_r, 1)
 
         # 数据记录
-        print(f"l: {w_act_l:.3f} rad/s, r: {w_act_r:.3f} rad/s, tar_l: {w_target_l:.3f} m/s, tar_r: {w_target_r:.3f} m/s")
+        #print(f"l: {w_act_l:.3f} rad/s, r: {w_act_r:.3f} rad/s, tar_l: {w_target_l:.3f} m/s, tar_r: {w_target_r:.3f} m/s")
         #print(f"v_linear: {v_linear:.3f}, w_act_l: {w_act_l:.3f}, w_act_r: {w_act_r:.3f}, delta: {delta:.3f}, e_geo: {e_geo:.3f}, theta_e: {theta_e:.3f}")
         #print(f"volt_l: {volt_l:.2f} V, volt_r: {volt_r:.2f} V, delta_l: {math.degrees(delta_l):.1f} deg, delta_r: {math.degrees(delta_r):.1f} deg")
-        log_data(x, y, yaw, v_linear, target_speed, roll, roll_rate, delta, e_geo, theta_e, w_act_l, w_act_r)
+        #log_data(x, y, yaw, v_linear, target_speed, roll, roll_rate, delta, e_geo, theta_e, w_act_l, w_act_r)
 
         # pack and send (firmware expects 4 uint16 in ID 0x180: volt_l, volt_r, delta_l, delta_r)
         def to_uint16_offset(v):
@@ -387,6 +387,7 @@ def main():
 
     # 初始化数据记录
     global log_file, csv_writer, start_time
+    '''
     try:
         log_file = open(log_file_path, 'w', newline='')
         csv_writer = csv.writer(log_file)
@@ -400,7 +401,7 @@ def main():
         print(f"数据记录初始化失败: {e}")
         log_file = None
         csv_writer = None
-
+    '''
     # 创建并启动线程（仅保留 CAN 接收与运动控制）
     threads = [
         threading.Thread(target=can_receiver, name="CANReceiver"),

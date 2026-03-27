@@ -89,13 +89,14 @@ class CanTransceiver(Node):
         self._imu_updated = False
 
     def print_data(self):
-        self.get_logger().info(#f"Pos: ({self.pos['x']:.2f}, {self.pos['y']:.2f}, {self.pos['z']:.2f}), "
+        pass
+        #self.get_logger().info(#f"Pos: ({self.pos['x']:.2f}, {self.pos['y']:.2f}, {self.pos['z']:.2f}), "
                                #f"Ori: ({self.ori['x']:.2f}, {self.ori['y']:.2f}, {self.ori['z']:.2f}, {self.ori['w']:.2f}), "
                                #f"Vel Lin: ({self.vel_lin['x']:.2f}, {self.vel_lin['y']:.2f}, {self.vel_lin['z']:.2f}), "
                                #f"Vel Ang: ({self.vel_ang['x']:.2f}, {self.vel_ang['y']:.2f}, {self.vel_ang['z']:.2f}), "
                                #f"IMU Acc Lin: ({self.imu_acc_lin['x']:.2f}, {self.imu_acc_lin['y']:.2f}, {self.imu_acc_lin['z']:.2f}), "
                                #f"IMU Vel Ang: ({self.imu_vel_ang['x']:.2f}, {self.imu_vel_ang['y']:.2f}, {self.imu_vel_ang['z']:.2f}), "
-                               f"Wheel Speed RL: {self.wheel_speed['rl']:.2f}, RR: {self.wheel_speed['rr']:.2f}")   
+                               #f"Wheel Speed RL: {self.wheel_speed['rl']:.2f}, RR: {self.wheel_speed['rr']:.2f}")   
 
     def can_rx_callback(self, msg):
         # print(f"Received CAN frame ID: {hex(msg.id)}, Data: {msg.data.tobytes().hex()}")
@@ -107,7 +108,7 @@ class CanTransceiver(Node):
         if can_id == 0x180:
             values = list(struct.unpack('<HHHH', bytes(data[:8])))
             values = [(v - 0x8000) / 1000.0 for v in values] # Convert back to float with offset
-            #self.get_logger().info(f"Decoded CAN 0x180 - Volts L: {values[0]:.3f}, Volts R: {values[1]:.3f}, Steer L: {values[2]:.3f}, Steer R: {values[3]:.3f}")
+            # self.get_logger().info(f"Decoded CAN 0x180 - Volts L: {values[0]:.3f}, Volts R: {values[1]:.3f}, Steer L: {values[2]:.3f}, Steer R: {values[3]:.3f}")
             self.pub_cmd_volts_l.publish(Float64(data=values[0]))
             self.pub_cmd_volts_r.publish(Float64(data=values[1]))
             self.pub_cmd_steer_l.publish(Float64(data=values[2]))
