@@ -79,12 +79,13 @@ void CAN_TxTask(void *argument)
             uint8_t count = 0;
             while (HAL_CAN_GetTxMailboxesFreeLevel(&hcan1) == 0 && count < 10) // 最多等待10次，每次100us，总共1ms超时
             {
-                delay_us(100); // 等待 100us，直到有空闲邮箱
-                taskYIELD(); // 让出 CPU 给其他任务，避免长时间占用 CPU
+                osDelay(1); // 等待1ms，直到有空闲邮箱
+                count++;
             }
             if (count >= 10 || HAL_CAN_AddTxMessage(&hcan1, &txPacket.header, txPacket.data, &TxMailbox) != HAL_OK)
             {
-                Error_Handler(); // 发送失败则进入死循环
+                // 发送失败直接丢弃，不要进入死循环卡死系统
+                continue;
             }
         }
     }

@@ -5,23 +5,32 @@
 ⚡ Injecting high-frequency traffic...
 
 ================ TEST COMPLETED ================
-📨 Total Ping Messages Sent: 797
-📥 Total Echo Received:      790
-📉 Packet Drop Rate:         0.88%
-⏱️  Motion Control Avg Time:  3.48 ms
-📈 Motion Control Max Time:  4.00 ms (Jitter/Spike)
+📨 Total Ping Messages Sent: 1404
+📥 Total Echo Received:      1404
+📉 Packet Drop Rate:         0.00%
+⏱️  Motion Control Avg Time:  0.04 ms
+📈 Motion Control Max Time:  0.27 ms (Jitter/Spike)
+
+=========== PING-PONG LATENCY STATS ===========
+📊 Average Latency:         4.35 ms
+📉 Minimum Latency:         2.07 ms
+📈 Maximum Latency:         6.02 ms
+📐 Latency Std Dev:         0.34 ms
+📊 Latency Jitter:          0.27 ms
+⚠️  High Latency (>10ms):    0.0%
 
 ========== RTOS TASK STACK WATERMARKS ==========
 (Words remaining. Closer to 0 means higher overflow risk)
-🛠️  Motion Control Task: 128 words
-📡  CAN Data Task:       188 words
-🧮  EKF Algorithm Task:  114 words
-🔋  Power Mgmt Task:     184 words
+🛠️  Motion Control Task: 63 words
+📡  CAN Data Task:       182 words
+🧮  EKF Algorithm Task:  112 words
+🔋  Power Mgmt Task:     148 words
 ================================================
-Contorl         96186857                2%
-IDLE            2394920603              72%
-MonitorTask     1719182         <1%
-CanDataCenter   7146677         <1%
-EkfAlgorithm    114279634               3%
-Tmr Svc         1694            <1%
-PowerManagement 2218            <1%
+PowerManagement 21              <1%
+CanTxTask       449             <1%
+Contorl         2741            <1%
+CanDataCenter   4072            <1%
+EkfAlgorithm    14341           2%
+Tmr Svc         0               <1%
+MonitorTask     309             <1%
+IDLE            605367          96%

@@ -100,7 +100,7 @@ robot/
 ├── Explain.md                      # 详细系统设计文档
 ├── README.md                       # 快速上手指南
 ├── LICENSE                         # MIT 许可证
-├── hil.sh                          # 启动 HIL 通信与控制链路（使用 robot_system.launch.py）
+├── hil.sh                          # 启动 HIL 通信与控制链路（使用 step_robot_system.launch.py）
 ├── sil.sh                          # 启动 SIL 控制链路（使用 robot_system.launch.py）
 ├── sim.sh                          # 构建并启动标准仿真（simulation.launch.py）
 ├── ssim.sh                         # 构建并启动锁步仿真（step_simulation.launch.py）
@@ -110,7 +110,7 @@ robot/
 │   │   ├── hil_stress_test.py
 │   │   ├── plot_results_stm32.py
 │   │   ├── hil_stress_results.csv
-│   │   ├── hil_stress_plot.png
+│   │   ├── hil_stress_kde.png
 │   │   └── hill_stress_results_summary.txt
 │   └── control/                    # SIL/仿真测试与数据绘制工具
 │       ├── plot_unified.py
@@ -1094,7 +1094,7 @@ def send_can_float(self, can_id: int, value: float) -> None
 - `simulation_data_unified_steering.png` — 转向角与误差
 - `simulation_data_unified_steering_angles.png` — 左右前轮转向角
 - `simulation_data_unified_roll_heading_lateral.png` — 侧倾、航向与横向误差
-- `hil_stress_plot.png` — HIL 测试运动控制执行时间曲线
+- `hil_stress_kde.png` — HIL 测试运动控制执行时间/延迟分布曲线
 
 绘图命令：
 

@@ -178,9 +178,9 @@ standard names. */
 } while(0)
 
 /* 直接返回 CPU 周期数。
-   注意：在 STM32F4 上，这个值每几十秒（2^32 / 168MHz = 25秒）就会溢出。
-   非常适合用于几秒钟到十几秒的短时间 HIL 性能采样分析！ */
-#define portGET_RUN_TIME_COUNTER_VALUE() (DWT->CYCCNT)
+   注意：由于 168MHz 会在 25 秒内导致 32 位溢出，这里将其替换为安全降频接口。 */
+extern uint32_t AppGetRunTimeCounterValue(void);
+#define portGET_RUN_TIME_COUNTER_VALUE() AppGetRunTimeCounterValue()
 /* USER CODE END Defines */
 
 #endif /* FREERTOS_CONFIG_H */

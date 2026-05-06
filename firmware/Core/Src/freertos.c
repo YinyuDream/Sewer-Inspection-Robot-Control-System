@@ -33,7 +33,7 @@
 #include "power_management.h" // 引入电源管理业务逻辑层
 #include "ekf.h" // 引入 EKF 算法接口
 #include "control.h" // 引入运动控制算法接口
-#include "FreeRTOSConfig.h" // 用于 SystemCoreClock 和 portGET_RUN_TIME_COUNTER_VALUE
+#include "FreeRTOSConfig.h" // 用于 SystemCoreClock
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -123,12 +123,40 @@ const osMessageQueueAttr_t motionControl_attributes = {
 /* USER CODE BEGIN FunctionPrototypes */
 void MonitorTask(void *argument);
 void CAN_TxTask(void *argument);
-static inline uint64_t get_hardware_time_us(void) {
-    /* Use DWT cycle counter for microsecond resolution */
-    uint32_t cycles = portGET_RUN_TIME_COUNTER_VALUE(); /* 32-bit counter, overflows every ~25.5s at 168MHz */
-    /* Convert cycles to microseconds: cycles * 1,000,000 / SystemCoreClock */
-    return (uint64_t)cycles * 1000000ULL / SystemCoreClock;
+
+/* 软件扩展的 64 位时钟周期计数器 */
+static volatile uint32_t prev_cycles = 0;
+static volatile uint64_t cycle_overflows = 0;
+
+/* 获取 64 位时钟周期的安全函数 */
+static inline uint64_t get_system_cycles_64(void) {
+    uint32_t current_cycles;
+    uint64_t overflows;
+    
+    /* 屏蔽部分中断以保证读取和状态更新的原子性 */
+    uint32_t isr_status = portSET_INTERRUPT_MASK_FROM_ISR();
+    current_cycles = DWT->CYCCNT; /* 直接读取底层硬件周期寄存器 */
+    if (current_cycles < prev_cycles) {
+        cycle_overflows += (1ULL << 32); /* 发生溢出，累加 2^32 */
+    }
+    prev_cycles = current_cycles;
+    overflows = cycle_overflows;
+    portCLEAR_INTERRUPT_MASK_FROM_ISR(isr_status);
+    
+    return overflows + current_cycles;
 }
+
+/* 提供给 FreeRTOS RunTimeStats 的接口，降低时钟频率至 ~10kHz 防止百分比爆炸 */
+uint32_t AppGetRunTimeCounterValue(void) {
+    /* 10kHz 即 100us 分辨率，最大可以支撑 FreeRTOS 运行约 4.9 天才发生 32位 溢出 */
+    return (uint32_t)(get_system_cycles_64() / (SystemCoreClock / 10000));
+}
+
+static inline uint64_t get_hardware_time_us(void) {
+    /* 利用 64 位周期计数计算微秒，再也不用担心 25 秒后清零导致的延时错误 */
+    return get_system_cycles_64() * 1000000ULL / SystemCoreClock;
+}
+
 void delay_us(uint32_t us)
 {
     uint64_t start_time = get_hardware_time_us();
@@ -457,6 +485,9 @@ void MonitorTask(void *argument)
     /* 每2秒发送一次堆栈水位监控数据 */
     osDelay(2000);
 
+    /* 必须在此刻调用一次 64位获取函数以保证溢出检测 (即使系统空闲且无中断调用) */
+    get_system_cycles_64();
+
     // 1. 发送 MotionControlTask (ContorlHandle) 的高水位 [ID: 0x500]
     data.FloatBytes.f[0] = (float)uxTaskGetStackHighWaterMark(ContorlHandle);
     data.FloatBytes.f[1] = 0.0f;
@@ -484,7 +515,7 @@ void MonitorTask(void *argument)
         vTaskGetRunTimeStats(runTimeStats);
 
         /* 仅发送统计体（不包含 MotionControl 精确耗时） */
-        CDC_Transmit_FS((uint8_t *)runTimeStats, strlen(runTimeStats));
+        if (CDC_Transmit_FS((uint8_t *)runTimeStats, strlen(runTimeStats)) == 0) { osDelay(50); }
 
         vPortFree(runTimeStats);
     }
